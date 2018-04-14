@@ -33,6 +33,51 @@ void* HookVFT(void* object, int index, void* targetf)
 	return previous;
 }
 
+enum
+{
+	Roblox,
+	RobloxStudio,
+	Win10,
+	Invalid
+} Platform;
+
+HWND MainWindow;
+
+void DetectPlatform()
+{
+	/* Get ProcessName */
+	char FileName[MAX_PATH];
+	GetModuleFileNameA(NULL, FileName, sizeof(FileName));
+
+	if (strstr(FileName, "RobloxPlayerBeta.exe"))
+		Platform = Roblox;
+	else if (strstr(FileName, "RobloxStudioBeta.exe"))
+		Platform = RobloxStudio;
+	else if (strstr(FileName, "Win10Universal.exe"))
+		Platform = Win10;
+	else
+	{
+		Platform = Invalid;
+		MessageBoxA(NULL, "Unknown platform", "Error", MB_OK);
+		DllExit();
+	}
+
+	/* Find MainWindow */
+	BOOL Result = EnumWindows([](HWND Window, LPARAM Param) -> BOOL
+	{
+		DWORD ProcessId;
+		GetWindowThreadProcessId(Window, &ProcessId);
+
+		if (IsWindowVisible(Window) && ProcessId == GetCurrentProcessId())
+		{
+			MainWindow = Window;
+			return FALSE;
+		}
+		
+		return TRUE;
+	}, NULL);
+}
+
 typedef HRESULT(_stdcall *IDXGISwapChainPresentFn)(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
 IDXGISwapChainPresentFn IDXGISwapChainPresent;
 
@@ -52,8 +97,11 @@ void WINAPI DllInit()
 {
 	if (GetModuleHandleA("dxgi.dll"))
 	{
+		/* Detect platform */
+		DetectPlatform();
+
 		/* Scan for DebugGraphicsVsync flag */
-		uintptr_t Flag = (uintptr_t)sigscan::scan("RobloxPlayerBeta.exe", "\x74\x10\x80\x3D\x00\x00\x00\x00\x00\xC7", "xxxx????xx"); // 74 10 80 3D ?? ?? ?? ?? 00 C7
+		uintptr_t Flag = (uintptr_t)sigscan::scan(NULL, "\x74\x10\x80\x3D\x00\x00\x00\x00\x00\xC7", "xxxx????xx"); // 74 10 80 3D ?? ?? ?? ?? 00 C7
 		if (!Flag)
 		{
 			MessageBoxA(NULL, "Scan failed", "Error", MB_OK);
@@ -72,7 +120,7 @@ void WINAPI DllInit()
 		SwapChainDesc.BufferCount = 1;
 		SwapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 		SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-		SwapChainDesc.OutputWindow = FindWindowW(NULL, L"ROBLOX"); // roblox hooks FindWindowA lol
+		SwapChainDesc.OutputWindow = MainWindow;
 		SwapChainDesc.SampleDesc.Count = 1;
 		SwapChainDesc.Windowed = TRUE;
 		SwapChainDesc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
