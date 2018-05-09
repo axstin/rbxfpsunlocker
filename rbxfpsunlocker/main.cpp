@@ -73,9 +73,31 @@ void DetectPlatform()
 			MainWindow = Window;
 			return FALSE;
 		}
-		
+
 		return TRUE;
 	}, NULL);
+}
+
+uintptr_t FindDebugGraphicsVsync()
+{
+	uintptr_t flag;
+
+	try
+	{
+		flag = (uintptr_t)sigscan::scan(NULL, "\x80\x3D\x00\x00\x00\x00\x00\x75\x04\xB0\x01\xEB", "xx????xxxxxx"); // 80 3D ?? ?? ?? ?? 00 75 04 B0 01 EB
+	}
+	catch (...)
+	{
+		flag = 0;
+	}
+
+	if (!flag)
+	{
+		MessageBoxA(MainWindow, "Scan failed! This is probably due to a Roblox update-- watch the github for any patches or a fix.", "rbxfpsunlocker Error", MB_OK);
+		DllExit();
+	}
+
+	return *(uint32_t*)(flag + 2);
 }
 
 typedef HRESULT(_stdcall *IDXGISwapChainPresentFn)(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
@@ -83,13 +105,13 @@ IDXGISwapChainPresentFn IDXGISwapChainPresent;
 
 HRESULT __stdcall IDXGISwapChainPresentHook(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
 {
-	/* 
-	 * https://msdn.microsoft.com/en-us/library/windows/desktop/bb174576(v=vs.85).aspx
-	 * https://i.imgur.com/BH2lY12.png
-	 * 
-	 * Enabling DebugGraphicsVsync disables throttling but enables VSync via Present calls
-	 * Solution: Hook Present and set SyncInterval to 0
-	 */
+	/*
+	* https://msdn.microsoft.com/en-us/library/windows/desktop/bb174576(v=vs.85).aspx
+	* https://i.imgur.com/BH2lY12.png
+	*
+	* Enabling DebugGraphicsVsync disables throttling in the engine but enables VSync via the SyncInterval parameter of Present calls
+	* Solution: Hook Present and set SyncInterval to 0
+	*/
 	return IDXGISwapChainPresent(pSwapChain, 0, Flags);
 }
 
@@ -101,13 +123,7 @@ void WINAPI DllInit()
 		DetectPlatform();
 
 		/* Scan for DebugGraphicsVsync flag */
-		uintptr_t Flag = (uintptr_t)sigscan::scan(NULL, "\x74\x10\x80\x3D\x00\x00\x00\x00\x00\xC7", "xxxx????xx"); // 74 10 80 3D ?? ?? ?? ?? 00 C7
-		if (!Flag)
-		{
-			MessageBoxA(NULL, "Scan failed", "Error", MB_OK);
-			DllExit();
-		}
-		Flag = *(uint32_t*)(Flag + 4);
+		uint32_t Flag = FindDebugGraphicsVsync();
 
 		/* Create dummy ID3D11Device to grab its vftable */
 		ID3D11Device* Device = 0;

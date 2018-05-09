@@ -34,7 +34,8 @@ std::vector<HANDLE> GetProcessesByImageName(const char* imageName, size_t limit 
 
 HANDLE GetProcessByImageName(const char* imageName)
 {
-	return GetProcessesByImageName(imageName, 1)[0];
+	auto processes = GetProcessesByImageName(imageName, 1);
+	return processes.size() > 0 ? processes[0] : NULL;
 }
 
 struct ProcessInfo
@@ -45,7 +46,7 @@ struct ProcessInfo
 	std::string window_title;
 
 	ProcessInfo(HANDLE handle, const std::string& name = "")
-	: handle(handle), name(name), window(NULL), window_title("")
+		: handle(handle), name(name), window(NULL), window_title("")
 	{
 		BOOL result = EnumWindows([](HWND window, LPARAM param) -> BOOL
 		{
