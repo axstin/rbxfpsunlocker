@@ -12,5 +12,11 @@ Any detections are most likely a false positive. If you don't trust me, feel fre
 2. **How do I fix "X dll is missing from your computer" or "The application was unable to start correctly" errors?**
 Download and install [vc_redist.x86.exe](https://i.imgur.com/dDB1ifs.png) from Microsoft's website: https://www.microsoft.com/en-us/download/details.aspx?id=48145
 
+##  Disclaimer
+
+Around June 21st I received reports that Roblox was [handing out bans](https://i.imgur.com/i4NEGB0.png) for using this tool. Roblox most likely assumes that `rbxfpsunlocker.dll` is an exploit or cheat. I fixed this issue in [release 1.6](https://github.com/axstin/rbxfpsunlocker/releases/tag/v1.6) and can confirm injecting rbxfpsunlocker is now "invisible" to Roblox. **HOWEVER, this doesn't stop Roblox from pushing an update in the future to patch this bypass. Please use this tool at your own risk** and keep in touch with this repository for updates.
+
+<sub>roblox this isn't an exploit no bans please :(</sub>
+
 ## Contact
 Discord: `Austin#7878 (ID: 72425749818126336)`
