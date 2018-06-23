@@ -9,6 +9,9 @@
 
 #include "sigscan.h"
 
+HMODULE MainModule = NULL;
+HANDLE SingletonMutex = NULL;
+
 void WINAPI DllInit();
 void WINAPI DllExit();
 
@@ -41,8 +44,6 @@ enum
 	Invalid
 } Platform;
 
-HWND MainWindow;
-
 void DetectPlatform()
 {
 	/* Get ProcessName */
@@ -61,21 +62,6 @@ void DetectPlatform()
 		MessageBoxA(NULL, "Unknown platform", "Error", MB_OK);
 		DllExit();
 	}
-
-	/* Find MainWindow */
-	BOOL Result = EnumWindows([](HWND Window, LPARAM Param) -> BOOL
-	{
-		DWORD ProcessId;
-		GetWindowThreadProcessId(Window, &ProcessId);
-
-		if (IsWindowVisible(Window) && ProcessId == GetCurrentProcessId())
-		{
-			MainWindow = Window;
-			return FALSE;
-		}
-
-		return TRUE;
-	}, NULL);
 }
 
 uintptr_t FindDebugGraphicsVsync()
@@ -93,7 +79,7 @@ uintptr_t FindDebugGraphicsVsync()
 
 	if (!flag)
 	{
-		MessageBoxA(MainWindow, "Scan failed! This is probably due to a Roblox update-- watch the github for any patches or a fix.", "rbxfpsunlocker Error", MB_OK);
+		MessageBoxA(NULL, "Scan failed! This is probably due to a Roblox update-- watch the github for any patches or a fix.", "rbxfpsunlocker Error", MB_OK);
 		DllExit();
 	}
 
@@ -115,8 +101,30 @@ HRESULT __stdcall IDXGISwapChainPresentHook(IDXGISwapChain* pSwapChain, UINT Syn
 	return IDXGISwapChainPresent(pSwapChain, 0, Flags);
 }
 
+void CheckRunning()
+{
+	char Name[64];
+	sprintf_s(Name, sizeof(Name), "RbxFpsUnlockerMutex_%d", GetCurrentProcessId());
+
+	SingletonMutex = CreateMutexA(NULL, FALSE, Name);
+
+	if (!SingletonMutex)
+	{
+		MessageBoxA(NULL, "Unable to create mutex", "Error", MB_OK);
+		DllExit();
+	}
+
+	if (GetLastError() == ERROR_ALREADY_EXISTS)
+	{
+		MessageBoxA(NULL, "rbxfpsunlocker is already running", "Error", MB_OK);
+		DllExit();
+	}
+}
+
 void WINAPI DllInit()
 {
+	CheckRunning();
+
 	if (GetModuleHandleA("dxgi.dll"))
 	{
 		/* Detect platform */
@@ -132,11 +140,19 @@ void WINAPI DllInit()
 		D3D_FEATURE_LEVEL FeatureLevel = D3D_FEATURE_LEVEL_11_0;
 		DXGI_SWAP_CHAIN_DESC SwapChainDesc;
 
+		/* Create dummy window */
+		HWND DummyWindow = CreateWindowA("STATIC", "Dummy", 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL);
+		if (!DummyWindow)
+		{
+			MessageBoxA(NULL, "Unable to create dummy window", "Error", MB_OK);
+			DllExit();
+		}
+
 		ZeroMemory(&SwapChainDesc, sizeof(SwapChainDesc));
 		SwapChainDesc.BufferCount = 1;
 		SwapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 		SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-		SwapChainDesc.OutputWindow = MainWindow;
+		SwapChainDesc.OutputWindow = DummyWindow;
 		SwapChainDesc.SampleDesc.Count = 1;
 		SwapChainDesc.Windowed = TRUE;
 		SwapChainDesc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
@@ -153,6 +169,7 @@ void WINAPI DllInit()
 			Device->Release();
 			DeviceContext->Release();
 			SwapChain->Release();
+			CloseHandle(DummyWindow);
 		}
 		else
 		{
@@ -164,13 +181,15 @@ void WINAPI DllInit()
 
 void WINAPI DllExit()
 {
-	FreeLibraryAndExitThread(GetModuleHandleA("rbxfpsunlocker.dll"), 0);
+	if (SingletonMutex) CloseHandle(SingletonMutex);
+	FreeLibraryAndExitThread(MainModule, 0); // This probably doesn't free our module if we manually map /shrug
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
 	if (fdwReason == DLL_PROCESS_ATTACH)
 	{
+		MainModule = hinstDLL;
 		DisableThreadLibraryCalls(hinstDLL);
 		CreateThread(0, 0, (LPTHREAD_START_ROUTINE)DllInit, 0, 0, 0);
 	}

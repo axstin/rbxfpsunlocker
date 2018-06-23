@@ -1,10 +1,19 @@
 #include <Windows.h>
 #include <iostream>
 #include <vector>
+#include <codecvt>
 #include <TlHelp32.h>
 
 #pragma comment(lib, "Shlwapi.lib")
 #include <Shlwapi.h>
+
+#define USE_BLACKBONE 1
+
+#if USE_BLACKBONE
+
+#include "BlackBone\Process\Process.h"
+
+#endif
 
 std::vector<HANDLE> GetProcessesByImageName(const char* imageName, size_t limit = -1)
 {
@@ -122,13 +131,29 @@ HANDLE GetRobloxProcess()
 	return processes[selection - 1].handle;
 }
 
-HANDLE Inject(HANDLE process, const char* dll_name)
+bool Inject(HANDLE process, const char* dll_name)
 {
+#if USE_BLACKBONE
+	blackbone::Process bbproc;
+	bbproc.Attach(process);
+
+	auto image = bbproc.mmap().MapImage(blackbone::Utils::AnsiToWstring(dll_name));
+
+	if (!image)
+	{
+		wprintf(L"Blackbone: Manual map failed with status: %X (%s)\n", image.status, blackbone::Utils::GetErrorDescription(image.status).c_str());
+		return false;
+	}
+
+	printf("Blackbone: Success! Base address: %X\n", image.result()->baseAddress);
+	return true;
+#else
 	LPVOID loadlib = (LPVOID)GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadLibraryA");
 	LPVOID remotestring = (LPVOID)VirtualAllocEx(process, NULL, strlen(dll_name), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
 	WriteProcessMemory(process, (LPVOID)remotestring, dll_name, strlen(dll_name), NULL);
-	return CreateRemoteThread(process, NULL, NULL, (LPTHREAD_START_ROUTINE)loadlib, (LPVOID)remotestring, NULL, NULL);
+	return CreateRemoteThread(process, NULL, NULL, (LPTHREAD_START_ROUTINE)loadlib, (LPVOID)remotestring, NULL, NULL) != NULL;
+#endif
 }
 
 void pause()
