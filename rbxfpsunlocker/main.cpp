@@ -104,7 +104,7 @@ HRESULT __stdcall IDXGISwapChainPresentHook(IDXGISwapChain* pSwapChain, UINT Syn
 void CheckRunning()
 {
 	char Name[64];
-	sprintf_s(Name, sizeof(Name), "RbxFpsUnlockerMutex_%d", GetCurrentProcessId());
+	sprintf_s(Name, sizeof(Name), "RFUMutex_%d", GetCurrentProcessId());
 
 	SingletonMutex = CreateMutexA(NULL, FALSE, Name);
 

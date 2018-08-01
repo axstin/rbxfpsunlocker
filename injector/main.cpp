@@ -7,6 +7,8 @@
 #pragma comment(lib, "Shlwapi.lib")
 #include <Shlwapi.h>
 
+#include "ui.h"
+
 #define USE_BLACKBONE 1
 
 #if USE_BLACKBONE
@@ -14,6 +16,8 @@
 #include "BlackBone\Process\Process.h"
 
 #endif
+
+HANDLE SingletonMutex;
 
 std::vector<HANDLE> GetProcessesByImageName(const char* imageName, size_t limit = -1)
 {
@@ -50,6 +54,7 @@ HANDLE GetProcessByImageName(const char* imageName)
 struct ProcessInfo
 {
 	HANDLE handle;
+	DWORD id;
 	std::string name;
 	HWND window;
 	std::string window_title;
@@ -76,6 +81,8 @@ struct ProcessInfo
 
 			return TRUE;
 		}, (LPARAM)this);
+
+		id = GetProcessId(handle);
 	}
 };
 
@@ -135,7 +142,7 @@ bool Inject(HANDLE process, const char* dll_name)
 {
 #if USE_BLACKBONE
 	blackbone::Process bbproc;
-	bbproc.Attach(process);
+	bbproc.Attach(GetProcessId(process)); // blackbone invalidates/closes the handle when bbproc goes out of scope so we can't pass 'process'
 
 	auto image = bbproc.mmap().MapImage(blackbone::Utils::AnsiToWstring(dll_name));
 
@@ -162,47 +169,154 @@ void pause()
 	getchar();
 }
 
-int main()
+std::unordered_map<DWORD, HANDLE> AttachedProcesses;
+
+DWORD WINAPI WatchThread(LPVOID)
 {
-	SetConsoleTitle("rbxfpsunlocker Injector");
+	char dllpath[MAX_PATH];
+	GetFullPathName("rbxfpsunlocker.dll", MAX_PATH, dllpath, NULL);
 
-	printf("Waiting for Roblox...\n");
-
-	HANDLE process;
-
-	do
+	if (!PathFileExists(dllpath))
 	{
-		Sleep(100);
-		process = GetRobloxProcess();
-	} while (!process);
-
-	printf("Found Roblox...\n");
-
-	char filepath[MAX_PATH];
-	memset(filepath, 0, MAX_PATH);
-	GetFullPathName("rbxfpsunlocker.dll", MAX_PATH, filepath, NULL);
-
-	if (!PathFileExists(filepath))
-	{
-		printf("\nERROR: failed to get path to rbxfpsunlocker.dll\n");
-		pause();
+		MessageBoxA(UI::Window, "Unable to get path to rbxfpsunlocker.dll", "Error", MB_OK);
 		return 0;
 	}
 
-	printf("Injecting %s...\n", filepath);
+	printf("Watch thread started\n");
 
-	if (!Inject(process, filepath))
+	while (1)
 	{
-		printf("\nERROR: failed to inject rbxfpsunlocker.dll\n");
-		pause();
-		return 0;
+		auto processes = GetProcessesByImageName("RobloxPlayerBeta.exe"); // no studio for now
+
+		for (auto& process : processes)
+		{
+			DWORD id = GetProcessId(process);
+
+			if (AttachedProcesses.find(id) == AttachedProcesses.end())
+			{
+				printf("Injecting into new process %X (pid %d)\n", process, id);
+
+				if (!Inject(process, dllpath))
+				{
+					MessageBoxA(UI::Window, "Failed to inject rbxfpsunlocker.dll", "Error", MB_OK);
+				}
+
+				AttachedProcesses[id] = process;
+
+				printf("New size: %d\n", AttachedProcesses.size());
+			}
+			else
+			{
+				CloseHandle(process);
+			}
+		}
+
+		for (auto it = AttachedProcesses.begin(); it != AttachedProcesses.end();)
+		{
+			HANDLE process = it->second;
+
+			DWORD code;
+			BOOL result = GetExitCodeProcess(process, &code);
+
+			if (code != STILL_ACTIVE)
+			{
+				printf("Purging dead process %X (pid %d) (code %d)\n", process, GetProcessId(process), code);
+				it = AttachedProcesses.erase(it);
+				CloseHandle(process);
+				printf("New size: %d\n", AttachedProcesses.size());
+			}
+			else
+			{
+				it++;
+			}
+		}
+
+		UI::AttachedProcessesCount = AttachedProcesses.size();
+
+		Sleep(2000);
 	}
-
-	CloseHandle(process);
-
-	printf("\nSuccess! The injector will close in 3 seconds...\n");
-
-	Sleep(3000);
 
 	return 0;
+}
+
+bool CheckRunning()
+{
+	SingletonMutex = CreateMutexA(NULL, FALSE, "RFUMutex");
+
+	if (!SingletonMutex)
+	{
+		MessageBoxA(NULL, "Unable to create mutex", "Error", MB_OK);
+		return false;
+	}
+
+	return GetLastError() == ERROR_ALREADY_EXISTS;
+}
+
+int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+{
+	UI::IsConsoleOnly = strstr(lpCmdLine, "--console") != nullptr;
+
+	if (UI::IsConsoleOnly)
+	{
+		UI::ToggleConsole();
+
+		printf("Waiting for Roblox...\n");
+
+		HANDLE process;
+
+		do
+		{
+			Sleep(100);
+			process = GetRobloxProcess();
+		}
+		while (!process);
+
+		printf("Found Roblox...\n");
+
+		char filepath[MAX_PATH];
+		memset(filepath, 0, MAX_PATH);
+		GetFullPathName("rbxfpsunlocker.dll", MAX_PATH, filepath, NULL);
+
+		if (!PathFileExists(filepath))
+		{
+			printf("\nERROR: failed to get path to rbxfpsunlocker.dll\n");
+			pause();
+			return 0;
+		}
+
+		printf("Injecting %s...\n", filepath);
+
+		if (!Inject(process, filepath))
+		{
+			printf("\nERROR: failed to inject rbxfpsunlocker.dll\n");
+			pause();
+			return 0;
+		}
+
+		CloseHandle(process);
+
+		printf("\nSuccess! The injector will close in 3 seconds...\n");
+
+		Sleep(3000);
+
+		return 0;
+	}
+	else
+	{
+		if (CheckRunning())
+		{
+			MessageBoxA(NULL, "Roblox FPS Unlocker is already running", "Error", MB_OK);
+		}
+		else
+		{
+			UI::ToggleConsole();
+
+			printf("Minimizing to system tray in 2 seconds...\n");
+			Sleep(2000);
+
+			UI::ToggleConsole();
+
+			return UI::Start(hInstance, WatchThread);
+		}
+	}
 }
