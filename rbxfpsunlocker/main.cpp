@@ -8,9 +8,21 @@
 #pragma comment(lib, "d3d11.lib")
 
 #include "sigscan.h"
+#include "../injector/mapping.h"
+
+#pragma pack(push, 1)
+struct SettingsIPC
+{
+	bool vsync_enabled;
+	double fps_cap;
+};
+#pragma pack(pop)
 
 HMODULE MainModule = NULL;
 HANDLE SingletonMutex = NULL;
+uintptr_t TaskScheduler = 0;
+int TaskSchedulerFrameDelayOffset = 0;
+FileMapping IPC;
 
 void WINAPI DllInit();
 void WINAPI DllExit();
@@ -64,26 +76,42 @@ void DetectPlatform()
 	}
 }
 
-uintptr_t FindDebugGraphicsVsync()
+uintptr_t FindTaskScheduler()
 {
-	uintptr_t flag;
+	uintptr_t result;
 
 	try
 	{
-		flag = (uintptr_t)sigscan::scan(NULL, "\x80\x3D\x00\x00\x00\x00\x00\x75\x04\xB0\x01\xEB", "xx????xxxxxx"); // 80 3D ?? ?? ?? ?? 00 75 04 B0 01 EB
+		result = (uintptr_t)sigscan::scan(NULL, "\x55\x8B\xEC\xE8\x00\x00\x00\x00\x8A\x4D\x08\x83\xC0\x04\x86\x08\x5D\xC3", "xxxx????xxxxxxxxxx"); // 55 8B EC E8 ?? ?? ?? ?? 8A 4D 08 83 C0 04 86 08 5D C3
+		
+		if (result)
+		{
+			typedef uintptr_t(*GetTaskSchedulerFn)();
+			GetTaskSchedulerFn GetTaskScheduler = (GetTaskSchedulerFn)(result + 8 + *(uintptr_t*)(result + 4)); // extract offset from call instruction
+
+			result = GetTaskScheduler();
+		}
 	}
 	catch (...)
 	{
-		flag = 0;
+		result = 0;
 	}
 
-	if (!flag)
+	return result;
+}
+
+int FindTaskSchedulerFrameDelayOffset(uintptr_t scheduler)
+{
+	/* Find the frame delay variable inside TaskScheduler (ugly, but it should survive updates unless the variable is removed or shifted) (variable was at +0x228 as of 10/11/2018) */
+	for (int i = 0x200; i < 0x300; i += 4)
 	{
-		MessageBoxA(NULL, "Scan failed! This is probably due to a Roblox update-- watch the github for any patches or a fix.", "rbxfpsunlocker Error", MB_OK);
-		DllExit();
+		static const double frame_delay = 1.0 / 60.0;
+		double difference = *(double*)(scheduler + i) - frame_delay;
+		difference = difference < 0 ? -difference : difference;
+		if (difference < 0.01) return i;
 	}
 
-	return *(uint32_t*)(flag + 2);
+	return 0;
 }
 
 typedef HRESULT(_stdcall *IDXGISwapChainPresentFn)(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
@@ -91,14 +119,12 @@ IDXGISwapChainPresentFn IDXGISwapChainPresent;
 
 HRESULT __stdcall IDXGISwapChainPresentHook(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
 {
-	/*
-	* https://msdn.microsoft.com/en-us/library/windows/desktop/bb174576(v=vs.85).aspx
-	* https://i.imgur.com/BH2lY12.png
-	*
-	* Enabling DebugGraphicsVsync disables throttling in the engine but enables VSync via the SyncInterval parameter of Present calls
-	* Solution: Hook Present and set SyncInterval to 0
-	*/
-	return IDXGISwapChainPresent(pSwapChain, 0, Flags);
+	auto ipc = IPC.Get<SettingsIPC *>();
+
+	static const double min_frame_delay = 1.0 / 1000000.0; // just using 0 here causes roblox to freeze for some reason
+	*(double*)(TaskScheduler + TaskSchedulerFrameDelayOffset) = ipc->fps_cap <= 0.0 ? min_frame_delay : 1.0 / ipc->fps_cap;
+
+	return IDXGISwapChainPresent(pSwapChain, ipc->vsync_enabled, Flags);
 }
 
 void CheckRunning()
@@ -116,7 +142,7 @@ void CheckRunning()
 
 	if (GetLastError() == ERROR_ALREADY_EXISTS)
 	{
-		MessageBoxA(NULL, "rbxfpsunlocker is already running", "Error", MB_OK);
+		MessageBoxA(NULL, "Roblox FPS Unlocker is already running in this process", "Error", MB_OK);
 		DllExit();
 	}
 }
@@ -127,12 +153,33 @@ void WINAPI DllInit()
 
 	if (GetModuleHandleA("dxgi.dll"))
 	{
+		/* Init IPC */
+		IPC.Open("RFUSettingsMap", sizeof(SettingsIPC));
+		if (!IPC.IsOpen())
+		{
+			MessageBoxA(NULL, "Unable to initiate IPC", "Error", MB_OK);
+			DllExit();
+		}
+
 		/* Detect platform */
 		DetectPlatform();
 
-		/* Scan for DebugGraphicsVsync flag */
-		uint32_t Flag = FindDebugGraphicsVsync();
+		/* Find TaskScheduler */
+		TaskScheduler = FindTaskScheduler();
+		if (!TaskScheduler)
+		{
+			MessageBoxA(NULL, "Unable to find TaskScheduler! This is probably due to a Roblox update-- watch the github for any patches or a fix.", "rbxfpsunlocker Error", MB_OK);
+			DllExit();
+		}
 
+		/* Find frame delay offset inside TaskScheduler */
+		TaskSchedulerFrameDelayOffset = FindTaskSchedulerFrameDelayOffset(TaskScheduler);
+		if (!TaskSchedulerFrameDelayOffset)
+		{
+			MessageBoxA(NULL, "Variable scan failed! This is probably due to a Roblox update-- watch the github for any patches or a fix.", "rbxfpsunlocker Error", MB_OK);
+			DllExit();
+		}
+		
 		/* Create dummy ID3D11Device to grab its vftable */
 		ID3D11Device* Device = 0;
 		ID3D11DeviceContext* DeviceContext = 0;
@@ -163,7 +210,7 @@ void WINAPI DllInit()
 		{
 			/* Hook IDXGISwapChain::Present & enable flag */
 			IDXGISwapChainPresent = (IDXGISwapChainPresentFn)HookVFT(SwapChain, 8, IDXGISwapChainPresentHook);
-			*(unsigned char*)Flag = 1;
+			//*(unsigned char*)Flag = 1;
 
 			/* Free objects */
 			Device->Release();

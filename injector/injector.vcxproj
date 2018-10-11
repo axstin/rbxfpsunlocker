@@ -82,10 +82,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="settings.cpp" />
     <ClCompile Include="ui.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h" />
+    <ClInclude Include="mapping.h" />
+    <ClInclude Include="settings.h" />
     <ClInclude Include="ui.h" />
   </ItemGroup>
   <ItemGroup>

@@ -5,11 +5,25 @@
 
 #include "ui.h"
 #include "resource.h"
+#include "mapping.h"
+#include "settings.h"
 
 #define RFU_TRAYICON			WM_APP + 1
 #define RFU_TRAYMENU_APC		WM_APP + 2
 #define RFU_TRAYMENU_CONSOLE	WM_APP + 3
 #define RFU_TRAYMENU_EXIT		WM_APP + 4
+#define RFU_TRAYMENU_VSYNC		WM_APP + 5
+#define RFU_TRAYMENU_LOADSET	WM_APP + 6
+
+#define RFU_FCS_FIRST			(WM_APP + 10)
+#define RFU_FCS_NONE			RFU_FCS_FIRST + 0
+#define RFU_FCS_30				RFU_FCS_FIRST + 1
+#define RFU_FCS_60				RFU_FCS_FIRST + 2
+#define RFU_FCS_75				RFU_FCS_FIRST + 3
+#define RFU_FCS_120				RFU_FCS_FIRST + 4
+#define RFU_FCS_144				RFU_FCS_FIRST + 5
+#define RFU_FCS_240				RFU_FCS_FIRST + 6
+#define RFU_FCS_LAST			(RFU_FCS_240)
 
 HWND UI::Window = NULL;
 int UI::AttachedProcessesCount = 0;
@@ -34,11 +48,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			char buffer[64];
 			sprintf_s(buffer, "Attached Processes: %d", UI::AttachedProcessesCount);
 
-			InsertMenu(popup, 0, MF_STRING | MF_GRAYED, RFU_TRAYMENU_APC, buffer);
-			InsertMenu(popup, 1, MF_SEPARATOR, 0, NULL);
-			InsertMenu(popup, 2, MF_STRING, RFU_TRAYMENU_CONSOLE, "Toggle Console");
-			InsertMenu(popup, 3, MF_SEPARATOR, 0, NULL);
-			InsertMenu(popup, 4, MF_STRING, RFU_TRAYMENU_EXIT, "Exit");
+			AppendMenu(popup, MF_STRING | MF_GRAYED, RFU_TRAYMENU_APC, buffer);
+			AppendMenu(popup, MF_SEPARATOR, 0, NULL);
+			AppendMenu(popup, MF_STRING | (Settings::VSyncEnabled ? MF_CHECKED : 0), RFU_TRAYMENU_VSYNC, "Enable VSync");
+
+			HMENU submenu = CreatePopupMenu();
+			AppendMenu(submenu, MF_STRING, RFU_FCS_NONE, "None");
+			AppendMenu(submenu, MF_STRING, RFU_FCS_30, "30");
+			AppendMenu(submenu, MF_STRING, RFU_FCS_60, "60");
+			AppendMenu(submenu, MF_STRING, RFU_FCS_75, "75");
+			AppendMenu(submenu, MF_STRING, RFU_FCS_120, "120");
+			AppendMenu(submenu, MF_STRING, RFU_FCS_144, "144");
+			AppendMenu(submenu, MF_STRING, RFU_FCS_240, "240");
+			CheckMenuRadioItem(submenu, RFU_FCS_FIRST, RFU_FCS_LAST, RFU_FCS_FIRST + Settings::FPSCapSelection, MF_BYCOMMAND);
+
+			AppendMenu(popup, MF_POPUP, (UINT_PTR)submenu, "FPS Cap");
+			AppendMenu(popup, MF_SEPARATOR, 0, NULL);
+			AppendMenu(popup, MF_STRING, RFU_TRAYMENU_LOADSET, "Load Settings");
+			AppendMenu(popup, MF_STRING, RFU_TRAYMENU_CONSOLE, "Toggle Console");
+			AppendMenu(popup, MF_STRING, RFU_TRAYMENU_EXIT, "Exit");
 
 			SetForegroundWindow(hwnd); // to allow "clicking away"
 			BOOL result = TrackPopupMenu(popup, TPM_RETURNCMD | TPM_TOPALIGN | TPM_LEFTALIGN, position.x, position.y, 0, hwnd, NULL);
@@ -57,6 +85,31 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				case RFU_TRAYMENU_CONSOLE:
 					UI::ToggleConsole();
 					break;
+
+				case RFU_TRAYMENU_LOADSET:
+					Settings::Load();
+					Settings::UpdateIPC();
+					break;
+
+				case RFU_TRAYMENU_VSYNC:
+					Settings::VSyncEnabled = !Settings::VSyncEnabled;
+					CheckMenuItem(popup, RFU_TRAYMENU_VSYNC, Settings::VSyncEnabled ? MF_CHECKED : MF_UNCHECKED);
+					break;
+				default:
+					if (result >= RFU_FCS_FIRST
+						&& result <= RFU_FCS_LAST)
+					{
+						static double fcs_map[] = { 0.0, 30.0, 60.0, 75.0, 120.0, 144.0, 240.0 };
+						Settings::FPSCapSelection = result - RFU_FCS_FIRST;
+						Settings::FPSCap = fcs_map[Settings::FPSCapSelection];
+					}
+				}
+
+				if (result != RFU_TRAYMENU_CONSOLE
+					&& result != RFU_TRAYMENU_LOADSET)
+				{
+					Settings::UpdateIPC();
+					Settings::Save();
 				}
 			}
 
@@ -104,6 +157,8 @@ bool UI::ToggleConsole()
 
 int UI::Start(HINSTANCE instance, LPTHREAD_START_ROUTINE watchthread)
 {
+
+	
 	WNDCLASSEX wcex;
 
 	wcex.cbSize = sizeof(wcex);

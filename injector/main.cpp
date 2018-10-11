@@ -8,6 +8,7 @@
 #include <Shlwapi.h>
 
 #include "ui.h"
+#include "settings.h"
 
 #define USE_BLACKBONE 1
 
@@ -254,6 +255,14 @@ bool CheckRunning()
 
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
+	if (!Settings::Init())
+	{
+		char buffer[64];
+		sprintf_s(buffer, "Unable to initiate settings\nGetLastError() = %X", GetLastError());
+		MessageBoxA(NULL, buffer, "Error", MB_OK);
+		return 0;
+	}
+
 	UI::IsConsoleOnly = strstr(lpCmdLine, "--console") != nullptr;
 
 	if (UI::IsConsoleOnly)
