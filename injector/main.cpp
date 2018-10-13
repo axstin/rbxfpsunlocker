@@ -234,6 +234,17 @@ DWORD WINAPI WatchThread(LPVOID)
 
 		UI::AttachedProcessesCount = AttachedProcesses.size();
 
+		if (AttachedProcesses.size() == 1)
+		{
+			static int last_present_count = 0;
+			auto& debug = Settings::GetIPC()->debug;
+			double fps = (debug.present_count - last_present_count) / 2.0;
+
+			printf("\rscan: +0x%X, sched: %X, offset: +0x%X, present_count: %d, avg fps: %f", debug.scan_result, debug.scheduler, debug.sfd_offset, debug.present_count, fps);
+
+			last_present_count = debug.present_count;
+		}
+
 		Sleep(2000);
 	}
 

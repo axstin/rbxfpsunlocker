@@ -15,6 +15,14 @@ struct SettingsIPC
 {
 	bool vsync_enabled;
 	double fps_cap;
+
+	struct
+	{
+		int scan_result;
+		void *scheduler;
+		int sfd_offset;
+		int present_count;
+	} debug;
 };
 #pragma pack(pop)
 
@@ -26,6 +34,11 @@ FileMapping IPC;
 
 void WINAPI DllInit();
 void WINAPI DllExit();
+
+inline SettingsIPC* GetIPC()
+{
+	return IPC.Get<SettingsIPC *>();
+}
 
 bool WriteMemory(void* address, const void* patch, size_t sz)
 {
@@ -89,6 +102,8 @@ uintptr_t FindTaskScheduler()
 			typedef uintptr_t(*GetTaskSchedulerFn)();
 			GetTaskSchedulerFn GetTaskScheduler = (GetTaskSchedulerFn)(result + 8 + *(uintptr_t*)(result + 4)); // extract offset from call instruction
 
+			GetIPC()->debug.scan_result = (int)GetTaskScheduler - (int)GetModuleHandleA(NULL);
+
 			result = GetTaskScheduler();
 		}
 	}
@@ -123,6 +138,8 @@ HRESULT __stdcall IDXGISwapChainPresentHook(IDXGISwapChain* pSwapChain, UINT Syn
 
 	static const double min_frame_delay = 1.0 / 1000000.0; // just using 0 here causes roblox to freeze for some reason
 	*(double*)(TaskScheduler + TaskSchedulerFrameDelayOffset) = ipc->fps_cap <= 0.0 ? min_frame_delay : 1.0 / ipc->fps_cap;
+
+	ipc->debug.present_count++;
 
 	return IDXGISwapChainPresent(pSwapChain, ipc->vsync_enabled, Flags);
 }
@@ -179,6 +196,10 @@ void WINAPI DllInit()
 			MessageBoxA(NULL, "Variable scan failed! This is probably due to a Roblox update-- watch the github for any patches or a fix.", "rbxfpsunlocker Error", MB_OK);
 			DllExit();
 		}
+
+		GetIPC()->debug.scheduler = (void *)TaskScheduler;
+		GetIPC()->debug.sfd_offset = TaskSchedulerFrameDelayOffset;
+		GetIPC()->debug.present_count = 0;
 		
 		/* Create dummy ID3D11Device to grab its vftable */
 		ID3D11Device* Device = 0;
@@ -210,7 +231,6 @@ void WINAPI DllInit()
 		{
 			/* Hook IDXGISwapChain::Present & enable flag */
 			IDXGISwapChainPresent = (IDXGISwapChainPresentFn)HookVFT(SwapChain, 8, IDXGISwapChainPresentHook);
-			//*(unsigned char*)Flag = 1;
 
 			/* Free objects */
 			Device->Release();

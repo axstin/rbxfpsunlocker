@@ -5,14 +5,6 @@
 #include <iostream>
 #include <fstream>
 
-#pragma pack(push, 1)
-struct SettingsIPC
-{
-	bool vsync_enabled;
-	double fps_cap;
-};
-#pragma pack(pop)
-
 FileMapping IPC;
 
 namespace Settings
@@ -84,10 +76,15 @@ namespace Settings
 
 	bool UpdateIPC()
 	{
-		auto ipc = IPC.Get<SettingsIPC *>();
+		auto ipc = GetIPC();
 		if (!ipc) return false;
 		ipc->vsync_enabled = VSyncEnabled;
 		ipc->fps_cap = FPSCap;
 		return true;
+	}
+
+	SettingsIPC* GetIPC()
+	{
+		return IPC.Get<SettingsIPC *>();
 	}
 }
