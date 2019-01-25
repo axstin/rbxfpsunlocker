@@ -9,6 +9,7 @@
 
 #include "ui.h"
 #include "settings.h"
+#include "version.h"
 
 #define USE_BLACKBONE 1
 
@@ -145,7 +146,9 @@ bool Inject(HANDLE process, const char* dll_name)
 	blackbone::Process bbproc;
 	bbproc.Attach(GetProcessId(process)); // blackbone invalidates/closes the handle when bbproc goes out of scope so we can't pass 'process'
 
-	auto image = bbproc.mmap().MapImage(blackbone::Utils::AnsiToWstring(dll_name));
+	// As of 1/25/2019, Roblox scans memory for initially-executable pages beginning with "MZ" (the PE file signature) and likely flags/logs any manually mapped or hidden modules (such as rbxfpsunlocker.dll)
+	// Wiping the header should solve this
+	auto image = bbproc.mmap().MapImage(blackbone::Utils::AnsiToWstring(dll_name), blackbone::eLoadFlags::WipeHeader);
 
 	if (!image)
 	{
@@ -330,6 +333,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		else
 		{
 			UI::ToggleConsole();
+
+			printf("Checking for updates...\n");
+			if (CheckForUpdates()) return 0;
 
 			printf("Minimizing to system tray in 2 seconds...\n");
 			Sleep(2000);

@@ -136,7 +136,7 @@ HRESULT __stdcall IDXGISwapChainPresentHook(IDXGISwapChain* pSwapChain, UINT Syn
 {
 	auto ipc = IPC.Get<SettingsIPC *>();
 
-	static const double min_frame_delay = 1.0 / 1000000.0; // just using 0 here causes roblox to freeze for some reason
+	static const double min_frame_delay = 1.0 / 10000.0; // just using 0 here causes roblox to freeze for some reason
 	*(double*)(TaskScheduler + TaskSchedulerFrameDelayOffset) = ipc->fps_cap <= 0.0 ? min_frame_delay : 1.0 / ipc->fps_cap;
 
 	ipc->debug.present_count++;

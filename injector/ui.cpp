@@ -7,6 +7,7 @@
 #include "resource.h"
 #include "mapping.h"
 #include "settings.h"
+#include "version.h"
 
 #define RFU_TRAYICON			WM_APP + 1
 #define RFU_TRAYMENU_APC		WM_APP + 2
@@ -14,6 +15,7 @@
 #define RFU_TRAYMENU_EXIT		WM_APP + 4
 #define RFU_TRAYMENU_VSYNC		WM_APP + 5
 #define RFU_TRAYMENU_LOADSET	WM_APP + 6
+#define RFU_TRAYMENU_GITHUB		WM_APP + 7
 
 #define RFU_FCS_FIRST			(WM_APP + 10)
 #define RFU_FCS_NONE			RFU_FCS_FIRST + 0
@@ -66,6 +68,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			AppendMenu(popup, MF_SEPARATOR, 0, NULL);
 			AppendMenu(popup, MF_STRING, RFU_TRAYMENU_LOADSET, "Load Settings");
 			AppendMenu(popup, MF_STRING, RFU_TRAYMENU_CONSOLE, "Toggle Console");
+			AppendMenu(popup, MF_STRING, RFU_TRAYMENU_GITHUB, "Visit GitHub");
 			AppendMenu(popup, MF_STRING, RFU_TRAYMENU_EXIT, "Exit");
 
 			SetForegroundWindow(hwnd); // to allow "clicking away"
@@ -84,6 +87,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 				case RFU_TRAYMENU_CONSOLE:
 					UI::ToggleConsole();
+					break;
+
+				case RFU_TRAYMENU_GITHUB:
+					ShellExecuteA(NULL, "open", "https://github.com/" RFU_GITHUB_REPO, NULL, NULL, SW_SHOWNORMAL);
 					break;
 
 				case RFU_TRAYMENU_LOADSET:
@@ -138,7 +145,7 @@ void UI::CreateHiddenConsole()
 		EnableMenuItem(menu, SC_CLOSE, MF_GRAYED);
 	}
 
-	SetConsoleTitleA("Roblox FPS Unlocker Console");
+	SetConsoleTitleA("Roblox FPS Unlocker " RFU_VERSION " Console");
 	ShowWindow(GetConsoleWindow(), SW_HIDE);
 }
 
