@@ -1,5 +1,6 @@
 #include "settings.h"
 #include "mapping.h"
+#include "rfu.h"
 
 #include <string>
 #include <iostream>
@@ -12,13 +13,16 @@ namespace Settings
 	bool VSyncEnabled = false;
 	unsigned char FPSCapSelection = 0;
 	double FPSCap = 0.0;
+	bool UnlockStudio = false;
 
 	bool Init()
 	{
+#ifndef RFU_NO_DLL
 		IPC.Open(0, "RFUSettingsMap", sizeof(SettingsIPC));
 		if (!IPC.IsOpen()) return false;
+#endif
 		if (!Load()) Save();
-		UpdateIPC();
+		Update();
 		return true;
 	}
 
@@ -49,6 +53,8 @@ namespace Settings
 						FPSCapSelection = std::stoi(value);
 					else if (key == "FPSCap")
 						FPSCap = std::stod(value);
+					else if (key == "UnlockStudio")
+						UnlockStudio = std::stoi(value) != 0;
 				}
 				catch (std::exception& e)
 				{
@@ -67,24 +73,35 @@ namespace Settings
 
 		printf("Saving settings to file...\n");
 
+#ifndef RFU_NO_DLL
 		file << "VSyncEnabled=" << std::to_string(VSyncEnabled) << std::endl;
+#else
+		file << "UnlockStudio=" << std::to_string(UnlockStudio) << std::endl;
+#endif
+
 		file << "FPSCapSelection=" << std::to_string(FPSCapSelection) << std::endl;
 		file << "FPSCap=" << std::to_string(FPSCap) << std::endl;
 
 		return true;
 	}
 
-	bool UpdateIPC()
+	bool Update()
 	{
+#ifndef RFU_NO_DLL
 		auto ipc = GetIPC();
 		if (!ipc) return false;
 		ipc->vsync_enabled = VSyncEnabled;
 		ipc->fps_cap = FPSCap;
+#else
+		SetFPSCapExternal(FPSCap);
+#endif
 		return true;
 	}
 
+#ifndef RFU_NO_DLL
 	SettingsIPC* GetIPC()
 	{
 		return IPC.Get<SettingsIPC *>();
 	}
+#endif
 }

@@ -27,6 +27,12 @@
     <ClCompile Include="version.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="procutil.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\rbxfpsunlocker\sigscan.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ui.h">
@@ -41,7 +47,10 @@
     <ClInclude Include="settings.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="version.h">
+    <ClInclude Include="procutil.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="rfu.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

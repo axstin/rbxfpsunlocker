@@ -7,7 +7,7 @@
 #include "resource.h"
 #include "mapping.h"
 #include "settings.h"
-#include "version.h"
+#include "rfu.h"
 
 #define RFU_TRAYICON			WM_APP + 1
 #define RFU_TRAYMENU_APC		WM_APP + 2
@@ -16,6 +16,7 @@
 #define RFU_TRAYMENU_VSYNC		WM_APP + 5
 #define RFU_TRAYMENU_LOADSET	WM_APP + 6
 #define RFU_TRAYMENU_GITHUB		WM_APP + 7
+#define RFU_TRAYMENU_STUDIO		WM_APP + 8
 
 #define RFU_FCS_FIRST			(WM_APP + 10)
 #define RFU_FCS_NONE			RFU_FCS_FIRST + 0
@@ -52,7 +53,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			AppendMenu(popup, MF_STRING | MF_GRAYED, RFU_TRAYMENU_APC, buffer);
 			AppendMenu(popup, MF_SEPARATOR, 0, NULL);
+
+#ifndef RFU_NO_DLL
 			AppendMenu(popup, MF_STRING | (Settings::VSyncEnabled ? MF_CHECKED : 0), RFU_TRAYMENU_VSYNC, "Enable VSync");
+#else
+			AppendMenu(popup, MF_STRING | (Settings::UnlockStudio ? MF_CHECKED : 0), RFU_TRAYMENU_STUDIO, "Unlock Studio");
+#endif
 
 			HMENU submenu = CreatePopupMenu();
 			AppendMenu(submenu, MF_STRING, RFU_FCS_NONE, "None");
@@ -79,6 +85,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				switch (result)
 				{
 				case RFU_TRAYMENU_EXIT:
+#ifdef RFU_NO_DLL
+					SetFPSCapExternal(60);
+#endif
 					Shell_NotifyIcon(NIM_DELETE, &NotifyIconData);
 					TerminateThread(WatchThread, 0);
 					FreeConsole();
@@ -95,13 +104,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 				case RFU_TRAYMENU_LOADSET:
 					Settings::Load();
-					Settings::UpdateIPC();
+					Settings::Update();
 					break;
 
+#ifndef RFU_NO_DLL
 				case RFU_TRAYMENU_VSYNC:
 					Settings::VSyncEnabled = !Settings::VSyncEnabled;
 					CheckMenuItem(popup, RFU_TRAYMENU_VSYNC, Settings::VSyncEnabled ? MF_CHECKED : MF_UNCHECKED);
 					break;
+#else
+				case RFU_TRAYMENU_STUDIO:
+					Settings::UnlockStudio = !Settings::UnlockStudio;
+					CheckMenuItem(popup, RFU_TRAYMENU_STUDIO, Settings::UnlockStudio ? MF_CHECKED : MF_UNCHECKED);
+					break;
+#endif
+
 				default:
 					if (result >= RFU_FCS_FIRST
 						&& result <= RFU_FCS_LAST)
@@ -113,9 +130,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				}
 
 				if (result != RFU_TRAYMENU_CONSOLE
-					&& result != RFU_TRAYMENU_LOADSET)
+					&& result != RFU_TRAYMENU_LOADSET
+					&& result != RFU_TRAYMENU_GITHUB
+					&& result != RFU_TRAYMENU_EXIT)
 				{
-					Settings::UpdateIPC();
+					Settings::Update();
 					Settings::Save();
 				}
 			}
@@ -145,7 +164,12 @@ void UI::CreateHiddenConsole()
 		EnableMenuItem(menu, SC_CLOSE, MF_GRAYED);
 	}
 
-	SetConsoleTitleA("Roblox FPS Unlocker " RFU_VERSION " Console");
+#ifdef _WIN64
+	SetConsoleTitleA("Roblox FPS Unlocker " RFU_VERSION " (64-bit) Console");
+#else
+	SetConsoleTitleA("Roblox FPS Unlocker " RFU_VERSION " (32-bit) Console");
+#endif
+
 	ShowWindow(GetConsoleWindow(), SW_HIDE);
 }
 

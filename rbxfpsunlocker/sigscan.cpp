@@ -6,7 +6,7 @@
 
 namespace sigscan
 {
-	bool compare(const char* location, const char* aob, const char* mask)
+	bool compare(const char *location, const char *aob, const char *mask)
 	{
 		for (; *mask; ++aob, ++mask, ++location)
 		{
@@ -19,7 +19,7 @@ namespace sigscan
 		return true;
 	}
 
-	bool compare_reverse(const char* location, const char* aob, const char* mask)
+	bool compare_reverse(const char *location, const char *aob, const char *mask)
 	{
 		const char* mask_iter = mask + strlen(mask) - 1;
 		for (; mask_iter >= mask; --aob, --mask_iter, --location)
@@ -33,15 +33,15 @@ namespace sigscan
 		return true;
 	}
 
-	byte* scan(const char* aob, const char* mask, uintptr_t start, uintptr_t end)
+	uint8_t *scan(const char *aob, const char *mask, uintptr_t start, uintptr_t end)
 	{
 		if (start <= end)
 		{
-			for (; start <= end; ++start)
+			for (; start < end - strlen(mask); ++start)
 			{
-				if (compare((char*)start, (char*)aob, mask))
+				if (compare((char *)start, (char *)aob, mask))
 				{
-					return (byte*)start;
+					return (uint8_t *)start;
 				}
 			}
 		}
@@ -51,7 +51,7 @@ namespace sigscan
 			{
 				if (compare_reverse((char*)start, (char*)aob, mask))
 				{
-					return (byte*)start - strlen(mask) - 1;
+					return (uint8_t *)start - strlen(mask) - 1;
 				}
 			}
 		}
@@ -59,7 +59,7 @@ namespace sigscan
 		return 0;
 	};
 
-	byte* scan(const char* module, const char* aob, const char* mask)
+	uint8_t *scan(const char *module, const char *aob, const char *mask)
 	{
 		MODULEINFO info;
 		if (GetModuleInformation(GetCurrentProcess(), GetModuleHandle(module), &info, sizeof(info)))

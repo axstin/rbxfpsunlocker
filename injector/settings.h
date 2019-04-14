@@ -21,11 +21,15 @@ namespace Settings
 	extern bool VSyncEnabled;
 	extern unsigned char FPSCapSelection;
 	extern double FPSCap;
+	extern bool UnlockStudio;
 
 	bool Init();
 	bool Load();
 	bool Save();
 
-	bool UpdateIPC();
+	bool Update();
+
+#ifndef RFU_NO_DLL
 	SettingsIPC* GetIPC();
+#endif
 }
