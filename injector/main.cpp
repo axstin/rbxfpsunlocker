@@ -143,7 +143,7 @@ size_t FindTaskSchedulerFrameDelayOffset(HANDLE process, const void *scheduler)
 	return -1;
 }
 
-const void *FindTaskScheduler(HANDLE process)
+const void *FindTaskScheduler(HANDLE process, const char **error = nullptr)
 {
 	try
 	{
@@ -151,7 +151,7 @@ const void *FindTaskScheduler(HANDLE process)
 
 		if (!info.module.base)
 		{
-			MessageBoxA(UI::Window, "Failed to get process base! If you are on a 64-bit operating system, make sure you are using the 64-bit version of Roblox FPS Unlocker.", "rbxfpsunlocker Error", MB_OK);
+			if (error) *error = "Failed to get process base! If you are on a 64-bit operating system, make sure you are using the 64-bit version of Roblox FPS Unlocker.";
 			return nullptr;
 		}
 
@@ -216,10 +216,12 @@ struct RobloxProcess
 	{
 		handle = process;
 
-		ts_ptr = FindTaskScheduler(process);
+		const char *error = nullptr;
+		ts_ptr = FindTaskScheduler(process, &error);
+
 		if (!ts_ptr)
 		{
-			MessageBoxA(UI::Window, "Unable to find TaskScheduler! This is probably due to a Roblox update-- watch the github for any patches or a fix.", "rbxfpsunlocker Error", MB_OK);
+			MessageBoxA(UI::Window, error ? error : "Unable to find TaskScheduler! This is probably due to a Roblox update-- watch the github for any patches or a fix.", "rbxfpsunlocker Error", MB_OK);
 			return false;
 		}
 
