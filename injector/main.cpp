@@ -137,7 +137,7 @@ size_t FindTaskSchedulerFrameDelayOffset(HANDLE process, const void *scheduler)
 		static const double frame_delay = 1.0 / 60.0;
 		double difference = *(double *)(buffer + i) - frame_delay;
 		difference = difference < 0 ? -difference : difference;
-		if (difference < 0.01) return 0x200 + i;
+		if (difference < 0.004) return 0x200 + i;
 	}
 
 	return -1;
@@ -147,12 +147,28 @@ const void *FindTaskScheduler(HANDLE process, const char **error = nullptr)
 {
 	try
 	{
-		ProcUtil::ProcessInfo info(process);
+		ProcUtil::ProcessInfo info;
 
-		if (!info.module.base)
+		int tries = 5;
+		int wait_time = 100;
+
+		while (true)
 		{
-			if (error) *error = "Failed to get process base! If you are on a 64-bit operating system, make sure you are using the 64-bit version of Roblox FPS Unlocker.";
-			return nullptr;
+			info = ProcUtil::ProcessInfo(process);
+			if (info.module.base != nullptr)
+				break;
+
+			if (tries--)
+			{
+				printf("[%p] Retrying in %dms...\n", process, wait_time);
+				Sleep(wait_time);
+				wait_time *= 2;
+			}
+			else
+			{
+				if (error) *error = "Failed to get process base! Restart Roblox FPS Unlocker or, if you are on a 64-bit operating system, make sure you are using the 64-bit version of Roblox FPS Unlocker.";
+				return nullptr;
+			}
 		}
 
 		auto start = (const uint8_t *)info.module.base;
@@ -269,7 +285,7 @@ struct RobloxProcess
 		{
 			try
 			{
-				static const double min_frame_delay = 1.0 / 10000.0; // just using 0 here causes roblox to freeze for some reason
+				static const double min_frame_delay = 1.0 / 10000.0;
 				double frame_delay = cap <= 0.0 ? min_frame_delay : 1.0 / cap;
 
 				ProcUtil::Write(handle, fd_ptr, frame_delay);
@@ -486,8 +502,11 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		{
 			UI::ToggleConsole();
 
-			printf("Checking for updates...\n");
-			if (CheckForUpdates()) return 0;
+			if (Settings::CheckForUpdates)
+			{
+				printf("Checking for updates...\n");
+				if (CheckForUpdates()) return 0;
+			}
 
 			printf("Minimizing to system tray in 2 seconds...\n");
 			Sleep(2000);

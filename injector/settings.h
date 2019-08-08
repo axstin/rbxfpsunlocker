@@ -22,6 +22,7 @@ namespace Settings
 	extern unsigned char FPSCapSelection;
 	extern double FPSCap;
 	extern bool UnlockStudio;
+	extern bool CheckForUpdates;
 
 	bool Init();
 	bool Load();

@@ -14,6 +14,7 @@ namespace Settings
 	unsigned char FPSCapSelection = 0;
 	double FPSCap = 0.0;
 	bool UnlockStudio = false;
+	bool CheckForUpdates = true;
 
 	bool Init()
 	{
@@ -55,6 +56,8 @@ namespace Settings
 						FPSCap = std::stod(value);
 					else if (key == "UnlockStudio")
 						UnlockStudio = std::stoi(value) != 0;
+					else if (key == "CheckForUpdates")
+						CheckForUpdates = std::stoi(value) != 0;
 				}
 				catch (std::exception& e)
 				{
@@ -81,6 +84,7 @@ namespace Settings
 
 		file << "FPSCapSelection=" << std::to_string(FPSCapSelection) << std::endl;
 		file << "FPSCap=" << std::to_string(FPSCap) << std::endl;
+		file << "CheckForUpdates=" << std::to_string(CheckForUpdates) << std::endl;
 
 		return true;
 	}

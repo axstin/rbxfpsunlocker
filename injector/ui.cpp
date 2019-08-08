@@ -17,6 +17,7 @@
 #define RFU_TRAYMENU_LOADSET	WM_APP + 6
 #define RFU_TRAYMENU_GITHUB		WM_APP + 7
 #define RFU_TRAYMENU_STUDIO		WM_APP + 8
+#define RFU_TRAYMENU_CFU		WM_APP + 9
 
 #define RFU_FCS_FIRST			(WM_APP + 10)
 #define RFU_FCS_NONE			RFU_FCS_FIRST + 0
@@ -59,6 +60,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 #else
 			AppendMenu(popup, MF_STRING | (Settings::UnlockStudio ? MF_CHECKED : 0), RFU_TRAYMENU_STUDIO, "Unlock Studio");
 #endif
+			AppendMenu(popup, MF_STRING | (Settings::CheckForUpdates ? MF_CHECKED : 0), RFU_TRAYMENU_CFU, "Check for Updates");
 
 			HMENU submenu = CreatePopupMenu();
 			AppendMenu(submenu, MF_STRING, RFU_FCS_NONE, "None");
@@ -118,6 +120,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					CheckMenuItem(popup, RFU_TRAYMENU_STUDIO, Settings::UnlockStudio ? MF_CHECKED : MF_UNCHECKED);
 					break;
 #endif
+				case RFU_TRAYMENU_CFU:
+					Settings::CheckForUpdates = !Settings::CheckForUpdates;
+					CheckMenuItem(popup, RFU_TRAYMENU_CFU, Settings::CheckForUpdates ? MF_CHECKED : MF_UNCHECKED);
+					break;
 
 				default:
 					if (result >= RFU_FCS_FIRST

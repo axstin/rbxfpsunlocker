@@ -103,9 +103,9 @@ namespace ProcUtil
 	struct ModuleInfo
 	{
 		std::filesystem::path path;
-		void *base;
-		size_t size;
-		void *entry_point;
+		void *base = nullptr;
+		size_t size = 0;
+		void *entry_point = nullptr;
 
 		HMODULE GetHandle() const
 		{
@@ -115,13 +115,13 @@ namespace ProcUtil
 
 	struct ProcessInfo
 	{
-		HANDLE handle;
+		HANDLE handle = NULL;
 		ModuleInfo module;
 
-		DWORD id;
+		DWORD id = 0;
 		std::string name;
 
-		HWND window;
+		HWND window = NULL;
 		std::string window_title;
 
 		bool FindMainWindow() // a.k.a. find first window associated with the process that is visible
@@ -150,6 +150,9 @@ namespace ProcUtil
 
 			return window != NULL;
 		}
+
+		ProcessInfo()
+		{}
 
 		ProcessInfo(HANDLE handle, bool find_window = false)
 			: handle(handle), window(NULL)

@@ -123,7 +123,7 @@ int FindTaskSchedulerFrameDelayOffset(uintptr_t scheduler)
 		static const double frame_delay = 1.0 / 60.0;
 		double difference = *(double*)(scheduler + i) - frame_delay;
 		difference = difference < 0 ? -difference : difference;
-		if (difference < 0.01) return i;
+		if (difference < 0.004) return i;
 	}
 
 	return 0;
