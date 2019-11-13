@@ -14,7 +14,7 @@ Any detections are most likely a false positive. If you don't trust me, feel fre
 
 Press `Shift+F5` in-game to view your FPS. In Roblox Studio, go to View->Stats->Summary.
 
-1. **I used this unlocker and my framerate is the same or below 60. Why?**
+3. **I used this unlocker and my framerate is the same or below 60. Why?**
 
 I say with great emphasis, as this seems to be a common misconception, that Roblox FPS Unlocker is an FPS _unlocker_ and not a _booster_. It will not boost Roblox's performance in any way and only removes Roblox's 60 FPS limit. To take advantage of RFU, a computer powerful enough to run Roblox at more than 60 FPS is required.
 
