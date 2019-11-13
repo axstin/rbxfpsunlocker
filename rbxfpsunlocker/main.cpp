@@ -117,8 +117,7 @@ uintptr_t FindTaskScheduler()
 
 int FindTaskSchedulerFrameDelayOffset(uintptr_t scheduler)
 {
-	/* Find the frame delay variable inside TaskScheduler (ugly, but it should survive updates unless the variable is removed or shifted) (variable was at +0x228 as of 10/11/2018) */
-	for (int i = 0x200; i < 0x300; i += 4)
+	for (int i = 0x100; i < 0x200; i += 4)
 	{
 		static const double frame_delay = 1.0 / 60.0;
 		double difference = *(double*)(scheduler + i) - frame_delay;

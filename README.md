@@ -12,9 +12,9 @@ Any detections are most likely a false positive. If you don't trust me, feel fre
 
 2. **How can I see my FPS?**
 
-Press `Shift+F5` in-game to view your FPS. This won't work for Roblox Studio (use a program like Fraps to view FPS there).
+Press `Shift+F5` in-game to view your FPS. In Roblox Studio, go to View->Stats->Summary.
 
-3. **I used this unlocker and my framerate is the same or below 60. Why?**
+1. **I used this unlocker and my framerate is the same or below 60. Why?**
 
 I say with great emphasis, as this seems to be a common misconception, that Roblox FPS Unlocker is an FPS _unlocker_ and not a _booster_. It will not boost Roblox's performance in any way and only removes Roblox's 60 FPS limit. To take advantage of RFU, a computer powerful enough to run Roblox at more than 60 FPS is required.
 
@@ -23,6 +23,10 @@ This being said, if you know your computer is powerful enough but still aren't s
 4. **Can I set a custom framerate cap?**
 
 Custom framerate limits can be set by changing the `FPSCap` value inside the `settings` file located in the same folder as `rbxfpsunlocker.exe` and reloading settings (RFU->Load Settings). Changing the cap with RFU's menu will reset/overwrite this value.
+
+5. **Does this work for Mac?**
+
+No. Roblox FPS Unlocker was written only for the Windows platform and I [currently have no plans to change this](https://github.com/axstin/rbxfpsunlocker/issues/49). However, those more experienced and with Mac hardware are free to port this project to Mac!
 
 ##  Disclaimer
 

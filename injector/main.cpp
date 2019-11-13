@@ -127,17 +127,20 @@ std::unordered_map<DWORD, RobloxProcess> AttachedProcesses;
 
 size_t FindTaskSchedulerFrameDelayOffset(HANDLE process, const void *scheduler)
 {
+	size_t search_offset = ProcUtil::IsProcess64Bit(process) ? 0x200 : 0x100;
+
 	uint8_t buffer[0x100];
-	if (!ProcUtil::Read(process, (const uint8_t *)scheduler + 0x200, buffer, sizeof(buffer)))
+	if (!ProcUtil::Read(process, (const uint8_t *)scheduler + search_offset, buffer, sizeof(buffer)))
 		return -1;
 
-	/* Find the frame delay variable inside TaskScheduler (ugly, but it should survive updates unless the variable is removed or shifted) (variable was at +0x228 as of 10/11/2018) */
+	/* Find the frame delay variable inside TaskScheduler (ugly, but it should survive updates unless the variable is removed or shifted)
+	   (variable was at +0x150 (32-bit) and +0x2B8 (studio 64-bit) as of 11/13/2019) */
 	for (int i = 0; i < sizeof(buffer) - sizeof(double); i += 4)
 	{
 		static const double frame_delay = 1.0 / 60.0;
 		double difference = *(double *)(buffer + i) - frame_delay;
 		difference = difference < 0 ? -difference : difference;
-		if (difference < 0.004) return 0x200 + i;
+		if (difference < 0.004) return search_offset + i;
 	}
 
 	return -1;
@@ -209,6 +212,7 @@ const void *FindTaskScheduler(HANDLE process, const char **error = nullptr)
 				{
 					if (auto inst = sigscan::scan("\xA1\x00\x00\x00\x00\x8B\x4D\xF4", "x????xxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
 					{
+						//printf("[%p] Inst: %p\n", process, gts_fn + (inst - buffer));
 						return (const void *)(*(uint32_t *)(inst + 1));
 					}
 				}
