@@ -127,7 +127,7 @@ std::unordered_map<DWORD, RobloxProcess> AttachedProcesses;
 
 size_t FindTaskSchedulerFrameDelayOffset(HANDLE process, const void *scheduler)
 {
-	size_t search_offset = ProcUtil::IsProcess64Bit(process) ? 0x200 : 0x100;
+	const size_t search_offset = 0x100; // ProcUtil::IsProcess64Bit(process) ? 0x200 : 0x100;
 
 	uint8_t buffer[0x100];
 	if (!ProcUtil::Read(process, (const uint8_t *)scheduler + search_offset, buffer, sizeof(buffer)))
