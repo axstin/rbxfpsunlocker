@@ -18,8 +18,10 @@
 #define RFU_TRAYMENU_GITHUB		WM_APP + 7
 #define RFU_TRAYMENU_STUDIO		WM_APP + 8
 #define RFU_TRAYMENU_CFU		WM_APP + 9
+#define RFU_TRAYMENU_ADV_NBE	WM_APP + 10
+#define RFU_TRAYMENU_ADV_SE		WM_APP + 11
 
-#define RFU_FCS_FIRST			(WM_APP + 10)
+#define RFU_FCS_FIRST			(WM_APP + 20)
 #define RFU_FCS_NONE			RFU_FCS_FIRST + 0
 #define RFU_FCS_30				RFU_FCS_FIRST + 1
 #define RFU_FCS_60				RFU_FCS_FIRST + 2
@@ -71,8 +73,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			AppendMenu(submenu, MF_STRING, RFU_FCS_144, "144");
 			AppendMenu(submenu, MF_STRING, RFU_FCS_240, "240");
 			CheckMenuRadioItem(submenu, RFU_FCS_FIRST, RFU_FCS_LAST, RFU_FCS_FIRST + Settings::FPSCapSelection, MF_BYCOMMAND);
-
 			AppendMenu(popup, MF_POPUP, (UINT_PTR)submenu, "FPS Cap");
+
+			HMENU advanced = CreatePopupMenu();
+			AppendMenu(advanced, MF_STRING | (Settings::SilentErrors ? MF_CHECKED : 0), RFU_TRAYMENU_ADV_SE, "Silent Errors");
+			AppendMenu(advanced, MF_STRING | (Settings::SilentErrors ? MF_GRAYED : 0) | (Settings::NonBlockingErrors ? MF_CHECKED : 0), RFU_TRAYMENU_ADV_NBE, "Use Console Errors");
+			AppendMenu(popup, MF_POPUP, (UINT_PTR)advanced, "Advanced");
+
 			AppendMenu(popup, MF_SEPARATOR, 0, NULL);
 			AppendMenu(popup, MF_STRING, RFU_TRAYMENU_LOADSET, "Load Settings");
 			AppendMenu(popup, MF_STRING, RFU_TRAYMENU_CONSOLE, "Toggle Console");
@@ -125,6 +132,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					CheckMenuItem(popup, RFU_TRAYMENU_CFU, Settings::CheckForUpdates ? MF_CHECKED : MF_UNCHECKED);
 					break;
 
+				case RFU_TRAYMENU_ADV_NBE:
+					Settings::NonBlockingErrors = !Settings::NonBlockingErrors;
+					CheckMenuItem(popup, RFU_TRAYMENU_ADV_NBE, Settings::NonBlockingErrors ? MF_CHECKED : MF_UNCHECKED);
+					break;
+
+				case RFU_TRAYMENU_ADV_SE:
+					Settings::SilentErrors = !Settings::SilentErrors;
+					CheckMenuItem(popup, RFU_TRAYMENU_ADV_SE, Settings::SilentErrors ? MF_CHECKED : MF_UNCHECKED);
+					if (Settings::SilentErrors) CheckMenuItem(popup, RFU_TRAYMENU_ADV_NBE, MF_GRAYED);
+					break;
+
 				default:
 					if (result >= RFU_FCS_FIRST
 						&& result <= RFU_FCS_LAST)
@@ -157,6 +175,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	return 0;
 }
 
+bool IsConsoleVisible = false;
+
+void UI::SetConsoleVisible(bool visible)
+{
+	IsConsoleVisible = visible;
+	ShowWindow(GetConsoleWindow(), visible ? SW_SHOWNORMAL : SW_HIDE);
+}
+
 void UI::CreateHiddenConsole()
 {
 	AllocConsole();
@@ -176,20 +202,17 @@ void UI::CreateHiddenConsole()
 	SetConsoleTitleA("Roblox FPS Unlocker " RFU_VERSION " (32-bit) Console");
 #endif
 
-	ShowWindow(GetConsoleWindow(), SW_HIDE);
+	SetConsoleVisible(false);
 }
 
 bool UI::ToggleConsole()
 {
-	static bool toggle = false;
-
 	if (!GetConsoleWindow())
 		UI::CreateHiddenConsole();
 
-	toggle = !toggle;
-	ShowWindow(GetConsoleWindow(), toggle ? SW_SHOWNORMAL : SW_HIDE);
+	SetConsoleVisible(!IsConsoleVisible);
 
-	return toggle;
+	return IsConsoleVisible;
 }
 
 int UI::Start(HINSTANCE instance, LPTHREAD_START_ROUTINE watchthread)

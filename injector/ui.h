@@ -5,6 +5,7 @@
 namespace UI
 {
 	void CreateHiddenConsole();
+	void SetConsoleVisible(bool visible);
 	bool ToggleConsole();
 	int Start(HINSTANCE instance, LPTHREAD_START_ROUTINE watchthread);
 

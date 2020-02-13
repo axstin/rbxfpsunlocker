@@ -23,6 +23,8 @@ namespace Settings
 	extern double FPSCap;
 	extern bool UnlockStudio;
 	extern bool CheckForUpdates;
+	extern bool NonBlockingErrors;
+	extern bool SilentErrors;
 
 	bool Init();
 	bool Load();

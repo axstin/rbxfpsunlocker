@@ -3,6 +3,7 @@
 #include <vector>
 #include <codecvt>
 #include <unordered_map>
+#include <chrono>
 #include <TlHelp32.h>
 
 #pragma comment(lib, "Shlwapi.lib")
@@ -44,7 +45,7 @@ HANDLE GetRobloxProcess()
 	if (processes.size() == 1)
 		return processes[0];
 
-	printf("Multiple processes found! Select a process to inject into (%d - %d):\n", 1, processes.size());
+	printf("Multiple processes found! Select a process to inject into (%u - %zu):\n", 1, processes.size());
 	for (int i = 0; i < processes.size(); i++)
 	{
 		try
@@ -75,7 +76,7 @@ HANDLE GetRobloxProcess()
 
 		if (selection < 1 || selection > processes.size())
 		{
-			printf("Please enter a number between %d and %d\n", 1, processes.size());
+			printf("Please enter a number between %u and %zu\n", 1, processes.size());
 			continue;
 		}
 
@@ -134,13 +135,13 @@ size_t FindTaskSchedulerFrameDelayOffset(HANDLE process, const void *scheduler)
 		return -1;
 
 	/* Find the frame delay variable inside TaskScheduler (ugly, but it should survive updates unless the variable is removed or shifted)
-	   (variable was at +0x150 (32-bit) and +0x2B8 (studio 64-bit) as of 11/13/2019) */
+	   (variable was at +0x150 (32-bit) and +0x180 (studio 64-bit) as of 2/13/2020) */
 	for (int i = 0; i < sizeof(buffer) - sizeof(double); i += 4)
 	{
 		static const double frame_delay = 1.0 / 60.0;
 		double difference = *(double *)(buffer + i) - frame_delay;
 		difference = difference < 0 ? -difference : difference;
-		if (difference < 0.004) return search_offset + i;
+		if (difference < std::numeric_limits<double>::epsilon()) return search_offset + i;
 	}
 
 	return -1;
@@ -152,6 +153,7 @@ const void *FindTaskScheduler(HANDLE process, const char **error = nullptr)
 	{
 		ProcUtil::ProcessInfo info;
 
+		// TODO: remove this retry code? (see RobloxProcess::Tick)
 		int tries = 5;
 		int wait_time = 100;
 
@@ -226,32 +228,69 @@ const void *FindTaskScheduler(HANDLE process, const char **error = nullptr)
 	return nullptr;
 }
 
+void NotifyError(const char* title, const char* error)
+{
+	if (Settings::SilentErrors || Settings::NonBlockingErrors)
+	{
+		// lol
+		HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO info{};
+		GetConsoleScreenBufferInfo(console, &info);
+
+		WORD color = (info.wAttributes & 0xFF00) | FOREGROUND_RED | FOREGROUND_INTENSITY;
+		SetConsoleTextAttribute(console, color);
+
+		printf("[ERROR] %s\n", error);
+
+		SetConsoleTextAttribute(console, info.wAttributes);
+
+		if (!Settings::SilentErrors)
+		{
+			UI::SetConsoleVisible(true);
+		}
+	}
+	else
+	{
+		MessageBoxA(UI::Window, error, title, MB_OK);
+	}
+}
+
 struct RobloxProcess
 {
 	HANDLE handle = NULL;
 	const void *ts_ptr = nullptr; // task scheduler pointer
 	const void *fd_ptr = nullptr; // frame delay pointer
 
-	bool Attach(HANDLE process)
+	int retries_left = 0;
+
+	bool Attach(HANDLE process, int retry_count)
 	{
 		handle = process;
-
-		const char *error = nullptr;
-		ts_ptr = FindTaskScheduler(process, &error);
-
-		if (!ts_ptr)
-		{
-			MessageBoxA(UI::Window, error ? error : "Unable to find TaskScheduler! This is probably due to a Roblox update-- watch the github for any patches or a fix.", "rbxfpsunlocker Error", MB_OK);
-			return false;
-		}
+		retries_left = retry_count;
 
 		Tick();
 
-		return true;
+		return ts_ptr != nullptr && fd_ptr != nullptr;
 	}
 
 	void Tick()
 	{
+		if (retries_left < 0) return; // we tried
+
+		if (!ts_ptr)
+		{
+			const char* error = nullptr;
+			ts_ptr = FindTaskScheduler(handle, &error);
+
+			if (!ts_ptr)
+			{
+				if (error) retries_left = 0; // if FindTaskScheduler returned an error it already retried 5 times. TODO: remove
+				if (retries_left-- <= 0)
+					NotifyError("rbxfpsunlocker Error", error ? error : "Unable to find TaskScheduler! This is probably due to a Roblox update-- watch the github for any patches or a fix.");
+				return;
+			}
+		}
+
 		if (ts_ptr && !fd_ptr)
 		{
 			try
@@ -263,12 +302,12 @@ struct RobloxProcess
 					size_t delay_offset = FindTaskSchedulerFrameDelayOffset(handle, scheduler);
 					if (delay_offset == -1)
 					{
-						MessageBoxA(UI::Window, "Variable scan failed! This is probably due to a Roblox update-- watch the github for any patches or a fix.", "rbxfpsunlocker Error", MB_OK);
-						ts_ptr = nullptr;
+						if (retries_left-- <= 0)
+							NotifyError("rbxfpsunlocker Error", "Variable scan failed! This is probably due to a Roblox update-- watch the github for any patches or a fix.");
 						return;
 					}
 
-					printf("[%p] Frame Delay Offset: %d\n", handle, delay_offset);
+					printf("[%p] Frame Delay Offset: %zu\n", handle, delay_offset);
 
 					fd_ptr = scheduler + delay_offset;
 
@@ -278,7 +317,8 @@ struct RobloxProcess
 			catch (ProcUtil::WindowsException& e)
 			{
 				printf("[%p] RobloxProcess::Tick failed: %s (%d)\n", handle, e.what(), e.GetLastError());
-				ts_ptr = nullptr;
+				if (retries_left-- <= 0)
+					NotifyError("rbxfpsunlocker Error", "An exception occurred while performing the variable scan.");
 			}
 		}
 	}
@@ -358,12 +398,12 @@ DWORD WINAPI WatchThread(LPVOID)
 					MessageBoxA(UI::Window, "Failed to inject rbxfpsunlocker.dll", "Error", MB_OK);
 				}
 #else
-				roblox_process.Attach(process);
+				roblox_process.Attach(process, 2);
 #endif
 
 				AttachedProcesses[id] = roblox_process;
 
-				printf("New size: %d\n", AttachedProcesses.size());
+				printf("New size: %zu\n", AttachedProcesses.size());
 			}
 			else
 			{
@@ -383,7 +423,7 @@ DWORD WINAPI WatchThread(LPVOID)
 				printf("Purging dead process %p (pid %d) (code %X)\n", process, GetProcessId(process), code);
 				it = AttachedProcesses.erase(it);
 				CloseHandle(process);
-				printf("New size: %d\n", AttachedProcesses.size());
+				printf("New size: %zu\n", AttachedProcesses.size());
 			}
 			else
 			{
@@ -480,7 +520,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 #else
 		printf("Attaching...\n");
 
-		if (!RobloxProcess().Attach(process))
+		if (!RobloxProcess().Attach(process, 0))
 		{
 			printf("\nERROR: unable to attach to process\n");
 			pause();
