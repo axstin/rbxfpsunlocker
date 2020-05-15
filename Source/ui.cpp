@@ -5,7 +5,6 @@
 
 #include "ui.h"
 #include "resource.h"
-#include "mapping.h"
 #include "settings.h"
 #include "rfu.h"
 
@@ -20,6 +19,7 @@
 #define RFU_TRAYMENU_CFU		WM_APP + 9
 #define RFU_TRAYMENU_ADV_NBE	WM_APP + 10
 #define RFU_TRAYMENU_ADV_SE		WM_APP + 11
+#define RFU_TRAYMENU_ADV_QS		WM_APP + 12
 
 #define RFU_FCS_FIRST			(WM_APP + 20)
 #define RFU_FCS_NONE			RFU_FCS_FIRST + 0
@@ -57,11 +57,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			AppendMenu(popup, MF_STRING | MF_GRAYED, RFU_TRAYMENU_APC, buffer);
 			AppendMenu(popup, MF_SEPARATOR, 0, NULL);
 
-#ifndef RFU_NO_DLL
-			AppendMenu(popup, MF_STRING | (Settings::VSyncEnabled ? MF_CHECKED : 0), RFU_TRAYMENU_VSYNC, "Enable VSync");
-#else
-			AppendMenu(popup, MF_STRING | (Settings::UnlockStudio ? MF_CHECKED : 0), RFU_TRAYMENU_STUDIO, "Unlock Studio");
-#endif
+			AppendMenu(popup, MF_STRING | (Settings::UnlockStudio ? MF_CHECKED : 0), RFU_TRAYMENU_STUDIO, "Unlock Roblox Studio");
 			AppendMenu(popup, MF_STRING | (Settings::CheckForUpdates ? MF_CHECKED : 0), RFU_TRAYMENU_CFU, "Check for Updates");
 
 			HMENU submenu = CreatePopupMenu();
@@ -78,6 +74,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			HMENU advanced = CreatePopupMenu();
 			AppendMenu(advanced, MF_STRING | (Settings::SilentErrors ? MF_CHECKED : 0), RFU_TRAYMENU_ADV_SE, "Silent Errors");
 			AppendMenu(advanced, MF_STRING | (Settings::SilentErrors ? MF_GRAYED : 0) | (Settings::NonBlockingErrors ? MF_CHECKED : 0), RFU_TRAYMENU_ADV_NBE, "Use Console Errors");
+			AppendMenu(advanced, MF_STRING | (Settings::QuickStart ? MF_CHECKED : 0), RFU_TRAYMENU_ADV_QS, "Quick Start");
 			AppendMenu(popup, MF_POPUP, (UINT_PTR)advanced, "Advanced");
 
 			AppendMenu(popup, MF_SEPARATOR, 0, NULL);
@@ -94,9 +91,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				switch (result)
 				{
 				case RFU_TRAYMENU_EXIT:
-#ifdef RFU_NO_DLL
 					SetFPSCapExternal(60);
-#endif
 					Shell_NotifyIcon(NIM_DELETE, &NotifyIconData);
 					TerminateThread(WatchThread, 0);
 					FreeConsole();
@@ -116,17 +111,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					Settings::Update();
 					break;
 
-#ifndef RFU_NO_DLL
-				case RFU_TRAYMENU_VSYNC:
-					Settings::VSyncEnabled = !Settings::VSyncEnabled;
-					CheckMenuItem(popup, RFU_TRAYMENU_VSYNC, Settings::VSyncEnabled ? MF_CHECKED : MF_UNCHECKED);
-					break;
-#else
 				case RFU_TRAYMENU_STUDIO:
 					Settings::UnlockStudio = !Settings::UnlockStudio;
 					CheckMenuItem(popup, RFU_TRAYMENU_STUDIO, Settings::UnlockStudio ? MF_CHECKED : MF_UNCHECKED);
 					break;
-#endif
+
 				case RFU_TRAYMENU_CFU:
 					Settings::CheckForUpdates = !Settings::CheckForUpdates;
 					CheckMenuItem(popup, RFU_TRAYMENU_CFU, Settings::CheckForUpdates ? MF_CHECKED : MF_UNCHECKED);
@@ -141,6 +130,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					Settings::SilentErrors = !Settings::SilentErrors;
 					CheckMenuItem(popup, RFU_TRAYMENU_ADV_SE, Settings::SilentErrors ? MF_CHECKED : MF_UNCHECKED);
 					if (Settings::SilentErrors) CheckMenuItem(popup, RFU_TRAYMENU_ADV_NBE, MF_GRAYED);
+					break;
+
+				case RFU_TRAYMENU_ADV_QS:
+					Settings::QuickStart = !Settings::QuickStart;
+					CheckMenuItem(popup, RFU_TRAYMENU_ADV_QS, Settings::QuickStart ? MF_CHECKED : MF_UNCHECKED);
 					break;
 
 				default:
@@ -216,9 +210,7 @@ bool UI::ToggleConsole()
 }
 
 int UI::Start(HINSTANCE instance, LPTHREAD_START_ROUTINE watchthread)
-{
-
-	
+{	
 	WNDCLASSEX wcex;
 
 	wcex.cbSize = sizeof(wcex);
@@ -257,11 +249,7 @@ int UI::Start(HINSTANCE instance, LPTHREAD_START_ROUTINE watchthread)
 
 	while ((ret = GetMessage(&msg, NULL, 0, 0)) != 0)
 	{
-		if (ret == -1)
-		{
-			
-		}
-		else
+		if (ret != -1)
 		{
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);

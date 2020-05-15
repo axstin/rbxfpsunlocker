@@ -30,18 +30,12 @@
     <ClCompile Include="procutil.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\rbxfpsunlocker\sigscan.cpp">
+    <ClCompile Include="sigscan.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ui.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="resource.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="mapping.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="settings.h">
@@ -53,9 +47,15 @@
     <ClInclude Include="rfu.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="sigscan.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="injector.rc">
+    <ResourceCompile Include="rbxfpsunlocker.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>

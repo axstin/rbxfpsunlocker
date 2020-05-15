@@ -3,7 +3,7 @@
 #include <TlHelp32.h>
 #include <filesystem>
 
-#include "../rbxfpsunlocker/sigscan.h"
+#include "sigscan.h"
 
 #define READ_LIMIT (1024 * 1024 * 2) // 2 MB
 

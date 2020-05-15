@@ -13,16 +13,7 @@
 #include "settings.h"
 #include "rfu.h"
 #include "procutil.h"
-#include "../rbxfpsunlocker/sigscan.h"
-
-#ifndef RFU_NO_DLL
-#define USE_BLACKBONE
-#endif
-
-#ifdef USE_BLACKBONE
-#include "BlackBone\Process\Process.h"
-#pragma comment(lib, "BlackBone.lib")
-#endif
+#include "sigscan.h"
 
 HANDLE SingletonMutex;
 
@@ -85,46 +76,6 @@ HANDLE GetRobloxProcess()
 
 	return processes[selection - 1];
 }
-
-#ifndef RFU_NO_DLL
-
-struct RobloxProcess
-{
-	HANDLE handle = NULL;
-
-	bool Attach(HANDLE process, const char *dll_name)
-	{
-		handle = process;
-
-#ifdef USE_BLACKBONE
-		blackbone::Process bbproc;
-		bbproc.Attach(GetProcessId(process)); // blackbone invalidates/closes the handle when bbproc goes out of scope so we can't pass 'process'
-
-		// As of 1/25/2019, Roblox scans memory for initially-executable pages beginning with "MZ" (the PE file signature) and likely flags/logs any manually mapped or hidden modules (such as rbxfpsunlocker.dll)
-		// Wiping the header should solve this
-		auto image = bbproc.mmap().MapImage(blackbone::Utils::AnsiToWstring(dll_name), blackbone::eLoadFlags::WipeHeader);
-
-		if (!image)
-		{
-			wprintf(L"Blackbone: Manual map failed with status: %X (%s)\n", image.status, blackbone::Utils::GetErrorDescription(image.status).c_str());
-			return false;
-		}
-
-		printf("Blackbone: Success! Base address: %X\n", image.result()->baseAddress);
-		return true;
-#else
-		LPVOID loadlib = (LPVOID)GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadLibraryA");
-		LPVOID remotestring = (LPVOID)VirtualAllocEx(process, NULL, strlen(dll_name), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-
-		WriteProcessMemory(process, (LPVOID)remotestring, dll_name, strlen(dll_name), NULL);
-		return CreateRemoteThread(process, NULL, NULL, (LPTHREAD_START_ROUTINE)loadlib, (LPVOID)remotestring, NULL, NULL) != NULL;
-#endif
-	}
-};
-
-std::unordered_map<DWORD, RobloxProcess> AttachedProcesses;
-
-#else
 
 size_t FindTaskSchedulerFrameDelayOffset(HANDLE process, const void *scheduler)
 {
@@ -352,8 +303,6 @@ void SetFPSCapExternal(double value)
 	}
 }
 
-#endif
-
 void pause()
 {
 	printf("Press enter to continue . . .");
@@ -362,26 +311,11 @@ void pause()
 
 DWORD WINAPI WatchThread(LPVOID)
 {
-#ifndef RFU_NO_DLL
-	char dllpath[MAX_PATH];
-	GetFullPathName("rbxfpsunlocker.dll", MAX_PATH, dllpath, NULL);
-
-	if (!PathFileExists(dllpath))
-	{
-		MessageBoxA(UI::Window, "Unable to get path to rbxfpsunlocker.dll", "Error", MB_OK);
-		return 0;
-	}
-#endif
-
 	printf("Watch thread started\n");
 
 	while (1)
 	{
-#ifndef RFU_NO_DLL
-		auto processes = ProcUtil::GetProcessesByImageName("RobloxPlayerBeta.exe");
-#else
 		auto processes = GetRobloxProcesses(Settings::UnlockStudio);
-#endif
 
 		for (auto& process : processes)
 		{
@@ -392,14 +326,7 @@ DWORD WINAPI WatchThread(LPVOID)
 				printf("Injecting into new process %p (pid %d)\n", process, id);
 				RobloxProcess roblox_process;
 
-#ifndef RFU_NO_DLL
-				if (!roblox_process.Attach(process, dllpath))
-				{
-					MessageBoxA(UI::Window, "Failed to inject rbxfpsunlocker.dll", "Error", MB_OK);
-				}
-#else
 				roblox_process.Attach(process, 2);
-#endif
 
 				AttachedProcesses[id] = roblox_process;
 
@@ -427,27 +354,11 @@ DWORD WINAPI WatchThread(LPVOID)
 			}
 			else
 			{
-#ifdef RFU_NO_DLL
-				it->second.Tick();
-#endif
 				it++;
 			}
 		}
 
 		UI::AttachedProcessesCount = AttachedProcesses.size();
-
-#ifndef RFU_NO_DLL
-		if (AttachedProcesses.size() == 1)
-		{
-			static int last_present_count = 0;
-			auto& debug = Settings::GetIPC()->debug;
-			double fps = (debug.present_count - last_present_count) / 2.0;
-
-			printf("\rscan: +0x%X, sched: %X, offset: +0x%X, present_count: %d, avg fps: %f", debug.scan_result, debug.scheduler, debug.sfd_offset, debug.present_count, fps);
-
-			last_present_count = debug.present_count;
-		}
-#endif
 
 		Sleep(2000);
 	}
@@ -496,28 +407,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		while (!process);
 
 		printf("Found Roblox...\n");
-
-#ifndef RFU_NO_DLL
-		char filepath[MAX_PATH];
-		memset(filepath, 0, MAX_PATH);
-		GetFullPathName("rbxfpsunlocker.dll", MAX_PATH, filepath, NULL);
-
-		if (!PathFileExists(filepath))
-		{
-			printf("\nERROR: failed to get path to rbxfpsunlocker.dll\n");
-			pause();
-			return 0;
-		}
-
-		printf("Injecting %s...\n", filepath);
-
-		if (!RobloxProcess().Attach(process, filepath))
-		{
-			printf("\nERROR: failed to inject rbxfpsunlocker.dll\n");
-			pause();
-			return 0;
-		}
-#else
 		printf("Attaching...\n");
 
 		if (!RobloxProcess().Attach(process, 0))
@@ -526,7 +415,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 			pause();
 			return 0;
 		}
-#endif
 
 		CloseHandle(process);
 
@@ -544,7 +432,10 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		}
 		else
 		{
-			UI::ToggleConsole();
+			if (!Settings::QuickStart)
+				UI::ToggleConsole();
+			else
+				UI::CreateHiddenConsole();
 
 			if (Settings::CheckForUpdates)
 			{
@@ -552,12 +443,14 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 				if (CheckForUpdates()) return 0;
 			}
 
-			printf("Minimizing to system tray in 2 seconds...\n");
-			Sleep(2000);
-
-			UI::ToggleConsole();
+			if (!Settings::QuickStart)
+			{
+				printf("Minimizing to system tray in 2 seconds...\n");
+				Sleep(2000);
+				UI::ToggleConsole();
+			}
 
 			return UI::Start(hInstance, WatchThread);
 		}
 	}
-}
+} 
