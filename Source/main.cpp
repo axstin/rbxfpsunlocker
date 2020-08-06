@@ -22,7 +22,7 @@ std::vector<HANDLE> GetRobloxProcesses(bool include_studio = true)
 	std::vector<HANDLE> result;
 	for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxPlayerBeta.exe")) result.emplace_back(handle);
 	if (include_studio) for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxStudioBeta.exe")) result.emplace_back(handle);
-	for (HANDLE handle : ProcUtil::GetProcessesByImageName("Win10Universal.exe")) result.emplace_back(handle);
+	for (HANDLE handle : ProcUtil::GetProcessesByImageName("Windows10Universal.exe")) result.emplace_back(handle);
 	return result;
 }
 
