@@ -17,12 +17,15 @@
 
 HANDLE SingletonMutex;
 
-std::vector<HANDLE> GetRobloxProcesses(bool include_studio = true)
+std::vector<HANDLE> GetRobloxProcesses(bool include_client = true, bool include_studio = true)
 {
 	std::vector<HANDLE> result;
-	for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxPlayerBeta.exe")) result.emplace_back(handle);
+	if (include_client)
+	{
+		for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxPlayerBeta.exe")) result.emplace_back(handle);
+		for (HANDLE handle : ProcUtil::GetProcessesByImageName("Windows10Universal.exe")) result.emplace_back(handle);
+	}
 	if (include_studio) for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxStudioBeta.exe")) result.emplace_back(handle);
-	for (HANDLE handle : ProcUtil::GetProcessesByImageName("Windows10Universal.exe")) result.emplace_back(handle);
 	return result;
 }
 
@@ -264,6 +267,10 @@ struct RobloxProcess
 
 					SetFPSCap(Settings::FPSCap);
 				}
+				else
+				{
+					printf("[%p] *ts_ptr == nullptr\n", handle);
+				}
 			}
 			catch (ProcUtil::WindowsException& e)
 			{
@@ -315,7 +322,7 @@ DWORD WINAPI WatchThread(LPVOID)
 
 	while (1)
 	{
-		auto processes = GetRobloxProcesses(Settings::UnlockStudio);
+		auto processes = GetRobloxProcesses(Settings::UnlockClient, Settings::UnlockStudio);
 
 		for (auto& process : processes)
 		{
@@ -326,7 +333,7 @@ DWORD WINAPI WatchThread(LPVOID)
 				printf("Injecting into new process %p (pid %d)\n", process, id);
 				RobloxProcess roblox_process;
 
-				roblox_process.Attach(process, 2);
+				roblox_process.Attach(process, 3);
 
 				AttachedProcesses[id] = roblox_process;
 
@@ -354,6 +361,7 @@ DWORD WINAPI WatchThread(LPVOID)
 			}
 			else
 			{
+				it->second.Tick();
 				it++;
 			}
 		}

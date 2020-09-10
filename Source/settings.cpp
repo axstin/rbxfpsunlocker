@@ -10,6 +10,7 @@ namespace Settings
 	bool VSyncEnabled = false;
 	unsigned char FPSCapSelection = 0;
 	double FPSCap = 0.0;
+	bool UnlockClient = true;
 	bool UnlockStudio = false;
 	bool CheckForUpdates = true;
 	bool NonBlockingErrors = true;
@@ -50,6 +51,8 @@ namespace Settings
 						FPSCapSelection = std::stoi(value);
 					else if (key == "FPSCap")
 						FPSCap = std::stod(value);
+					else if (key == "UnlockClient")
+						UnlockClient = std::stoi(value) != 0;
 					else if (key == "UnlockStudio")
 						UnlockStudio = std::stoi(value) != 0;
 					else if (key == "CheckForUpdates")
@@ -78,6 +81,7 @@ namespace Settings
 
 		printf("Saving settings to file...\n");
 
+		file << "UnlockClient=" << std::to_string(UnlockClient) << std::endl;
 		file << "UnlockStudio=" << std::to_string(UnlockStudio) << std::endl;
 		file << "FPSCapSelection=" << std::to_string(FPSCapSelection) << std::endl;
 		file << "FPSCap=" << std::to_string(FPSCap) << std::endl;

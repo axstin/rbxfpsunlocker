@@ -20,6 +20,7 @@
 #define RFU_TRAYMENU_ADV_NBE	WM_APP + 10
 #define RFU_TRAYMENU_ADV_SE		WM_APP + 11
 #define RFU_TRAYMENU_ADV_QS		WM_APP + 12
+#define RFU_TRAYMENU_CLIENT		WM_APP + 13
 
 #define RFU_FCS_FIRST			(WM_APP + 20)
 #define RFU_FCS_NONE			RFU_FCS_FIRST + 0
@@ -57,6 +58,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			AppendMenu(popup, MF_STRING | MF_GRAYED, RFU_TRAYMENU_APC, buffer);
 			AppendMenu(popup, MF_SEPARATOR, 0, NULL);
 
+			AppendMenu(popup, MF_STRING | (Settings::UnlockClient ? MF_CHECKED : 0), RFU_TRAYMENU_CLIENT, "Unlock Roblox Player");
 			AppendMenu(popup, MF_STRING | (Settings::UnlockStudio ? MF_CHECKED : 0), RFU_TRAYMENU_STUDIO, "Unlock Roblox Studio");
 			AppendMenu(popup, MF_STRING | (Settings::CheckForUpdates ? MF_CHECKED : 0), RFU_TRAYMENU_CFU, "Check for Updates");
 
@@ -109,6 +111,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				case RFU_TRAYMENU_LOADSET:
 					Settings::Load();
 					Settings::Update();
+					break;
+
+				case RFU_TRAYMENU_CLIENT:
+					Settings::UnlockClient = !Settings::UnlockClient;
+					CheckMenuItem(popup, RFU_TRAYMENU_CLIENT, Settings::UnlockClient ? MF_CHECKED : MF_UNCHECKED);
 					break;
 
 				case RFU_TRAYMENU_STUDIO:
