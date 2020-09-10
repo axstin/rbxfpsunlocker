@@ -43,6 +43,8 @@ Before [submitting an issue](https://github.com/axstin/rbxfpsunlocker/issues/new
 - Be as informative as possible: issues with ambiguous titles and missing/low-quality descriptions will be deleted
 - Include a copy of RFU's console (tray icon->Toggle Console). You can censor any personal information (file paths and so on)
 - Include steps on how to reproduce the issue, if possible
+- Include on what platform(s) the issue occurs (normal client, Windows 10 Roblox app, Roblox Studio)
+- If relevant, include system specifications (e.g. GPU model) and monitor refresh rates
 
 Issues submitted not attempting to follow these guidelines will be closed or deleted.
 
