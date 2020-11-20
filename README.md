@@ -4,6 +4,20 @@
 3. Run `rbxfpsunlocker.exe` before or after starting Roblox
 4. Enjoy those [beautiful frames](https://i.imgur.com/vsLf04O.png) 👌
 
+## Submitting an Issue
+
+Before [submitting an issue](https://github.com/axstin/rbxfpsunlocker/issues/new), please:
+- Make sure you submit an issue or suggestion
+- Make sure your question or problem cannot be answered in the FAQ below
+- Please read previous issues to make sure your question was not asked before
+- Be as informative as possible: issues with ambiguous titles and missing/low-quality descriptions will be deleted
+- Include a copy of RFU's console (tray icon->Toggle Console). You can censor any personal information (file paths and so on)
+- Include steps on how to reproduce the issue, if possible
+- Include on what platform(s) the issue occurs (normal client, Windows 10 Roblox app, Roblox Studio)
+- If relevant, include system specifications (e.g. GPU model) and monitor refresh rates
+
+Issues submitted not attempting to follow these guidelines will be closed or deleted.
+
 ## FAQ
 
 1. **Some files are being deleted and/or my anti-virus is detecting rbxfpsunlocker as malware. What do I do?**
@@ -35,18 +49,6 @@ This error means Roblox FPS Unlocker could not connect to the Internet to check 
 7. **How do I uninstall Roblox FPS Unlocker?**
 
 RFU does not install itself anywhere. It can be deleted by simply exiting the program if it is open (tray icon->Exit) and deleting `rbxfpsunlocker.exe`.
-
-## Submitting an Issue
-
-Before [submitting an issue](https://github.com/axstin/rbxfpsunlocker/issues/new), please:
-- Make sure your question or problem cannot be answered in the FAQ above
-- Be as informative as possible: issues with ambiguous titles and missing/low-quality descriptions will be deleted
-- Include a copy of RFU's console (tray icon->Toggle Console). You can censor any personal information (file paths and so on)
-- Include steps on how to reproduce the issue, if possible
-- Include on what platform(s) the issue occurs (normal client, Windows 10 Roblox app, Roblox Studio)
-- If relevant, include system specifications (e.g. GPU model) and monitor refresh rates
-
-Issues submitted not attempting to follow these guidelines will be closed or deleted.
 
 ##  Disclaimer
 
