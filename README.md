@@ -16,7 +16,7 @@ Press `Shift+F5` in-game to view your FPS. In Roblox Studio, go to View->Stats->
 
 3. **How do I resolve choppiness and input lag at high framerates?**
 
-Try entering fullscreen using Alt+Enter.
+Try entering fullscreen using `Alt+Enter`.
 
 4. **I used this unlocker and my framerate is the same or below 60. Why?**
 
