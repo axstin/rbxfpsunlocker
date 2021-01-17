@@ -257,7 +257,7 @@ struct RobloxProcess
 					if (delay_offset == -1)
 					{
 						if (retries_left-- <= 0)
-							NotifyError("rbxfpsunlocker Error", "Variable scan failed! This is probably due to a Roblox update-- watch the github for any patches or a fix.");
+							NotifyError("rbxfpsunlocker Error", "Variable scan failed! Make sure your framerate is at ~60.0 FPS (press Shift+F5 in-game) before using Roblox FPS Unlocker.");
 						return;
 					}
 
