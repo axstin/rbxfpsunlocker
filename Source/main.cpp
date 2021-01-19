@@ -447,14 +447,18 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 			if (Settings::CheckForUpdates)
 			{
-				printf("Checking for updates...\n");
+				printf("Checking for updates...\n"); // goes to hidden console regardless of QuickStart
 				if (CheckForUpdates()) return 0;
 			}
 
 			if (!Settings::QuickStart)
 			{
-				printf("Minimizing to system tray in 2 seconds...\n");
-				Sleep(2000);
+				if (Settings::MinimizeToTray)
+				{
+					printf("Minimizing to system tray in 2 seconds...\n");
+					Sleep(2000);
+				}
+
 				UI::ToggleConsole();
 			}
 

@@ -11,6 +11,7 @@ namespace Settings
 	extern bool NonBlockingErrors;
 	extern bool SilentErrors;
 	extern bool QuickStart;
+	extern bool MinimizeToTray;
 
 	bool Init();
 	bool Load();

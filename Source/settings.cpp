@@ -16,6 +16,7 @@ namespace Settings
 	bool NonBlockingErrors = true;
 	bool SilentErrors = false;
 	bool QuickStart = false;
+	bool MinimizeToTray = true;
 
 	bool Init()
 	{
@@ -28,7 +29,10 @@ namespace Settings
 
 	bool Load()
 	{
-		std::ifstream file("settings");
+		std::string appdata(getenv("localappdata"));
+		std::string path = "\\Roblox\\rbxfpsunlocker.cfg";
+		
+		std::ifstream file(appdata + path);
 		if (!file.is_open()) return false;
 
 		printf("Loading settings from file...\n");
@@ -63,6 +67,8 @@ namespace Settings
 						SilentErrors = std::stoi(value) != 0;
 					else if (key == "QuickStart")
 						QuickStart = std::stoi(value) != 0;
+					else if (key == "MinimizeToTray")
+						MinimizeToTray = std::stoi(value) != 0;
 				}
 				catch (std::exception& e)
 				{
@@ -76,7 +82,10 @@ namespace Settings
 
 	bool Save()
 	{
-		std::ofstream file("settings");
+		std::string appdata(getenv("localappdata"));
+		std::string path = "\\Roblox\\rbxfpsunlocker.cfg";
+
+		std::ofstream file(appdata + path);
 		if (!file.is_open()) return false;
 
 		printf("Saving settings to file...\n");
@@ -89,6 +98,7 @@ namespace Settings
 		file << "NonBlockingErrors=" << std::to_string(NonBlockingErrors) << std::endl;
 		file << "SilentErrors=" << std::to_string(SilentErrors) << std::endl;
 		file << "QuickStart=" << std::to_string(QuickStart) << std::endl;
+		file << "MinimizeToTray=" << std::to_string(MinimizeToTray) << std::endl;
 
 		return true;
 	}
