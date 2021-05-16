@@ -71,9 +71,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			AppendMenu(submenu, MF_STRING, RFU_FCS_75, "75");
 			AppendMenu(submenu, MF_STRING, RFU_FCS_120, "120");
 			AppendMenu(submenu, MF_STRING, RFU_FCS_144, "144");
-			AppendMenu(submenu, MF_STRING, RFU_FCS_144, "165");
+			AppendMenu(submenu, MF_STRING, RFU_FCS_165, "165");
 			AppendMenu(submenu, MF_STRING, RFU_FCS_240, "240");
-			AppendMenu(submenu, MF_STRING, RFU_FCS_240, "360");
+			AppendMenu(submenu, MF_STRING, RFU_FCS_360, "360");
 			CheckMenuRadioItem(submenu, RFU_FCS_FIRST, RFU_FCS_LAST, RFU_FCS_FIRST + Settings::FPSCapSelection, MF_BYCOMMAND);
 			AppendMenu(popup, MF_POPUP, (UINT_PTR)submenu, "FPS Cap");
 
