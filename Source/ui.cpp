@@ -30,8 +30,9 @@
 #define RFU_FCS_120				RFU_FCS_FIRST + 4
 #define RFU_FCS_144				RFU_FCS_FIRST + 5
 #define RFU_FCS_165				RFU_FCS_FIRST + 6
-#define RFU_FCS_240				RFU_FCS_FIRST + 7
-#define RFU_FCS_360				RFU_FCS_FIRST + 8
+#define RFU_FCS_180				RFU_FCS_FIRST + 7
+#define RFU_FCS_240				RFU_FCS_FIRST + 8
+#define RFU_FCS_360				RFU_FCS_FIRST + 9
 #define RFU_FCS_LAST			(RFU_FCS_360)
 
 HWND UI::Window = NULL;
@@ -72,6 +73,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			AppendMenu(submenu, MF_STRING, RFU_FCS_120, "120");
 			AppendMenu(submenu, MF_STRING, RFU_FCS_144, "144");
 			AppendMenu(submenu, MF_STRING, RFU_FCS_165, "165");
+			AppendMenu(submenu, MF_STRING, RFU_FCS_165, "180");
 			AppendMenu(submenu, MF_STRING, RFU_FCS_240, "240");
 			AppendMenu(submenu, MF_STRING, RFU_FCS_360, "360");
 			CheckMenuRadioItem(submenu, RFU_FCS_FIRST, RFU_FCS_LAST, RFU_FCS_FIRST + Settings::FPSCapSelection, MF_BYCOMMAND);
@@ -152,7 +154,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					if (result >= RFU_FCS_FIRST
 						&& result <= RFU_FCS_LAST)
 					{
-						static double fcs_map[] = { 0.0, 30.0, 60.0, 75.0, 120.0, 144.0, 165.0, 240.0, 360.0 };
+						static double fcs_map[] = { 0.0, 30.0, 60.0, 75.0, 120.0, 144.0, 165.0, 180.0, 240.0, 360.0 };
 						Settings::FPSCapSelection = result - RFU_FCS_FIRST;
 						Settings::FPSCap = fcs_map[Settings::FPSCapSelection];
 					}
