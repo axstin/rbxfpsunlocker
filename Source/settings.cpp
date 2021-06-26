@@ -4,11 +4,75 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <functional>
+#include <cerrno>
+
+const char *advance(const char *ptr)
+{
+	while (isspace(*ptr)) ptr++;
+	return ptr;
+}
+
+// scuffed array parse. e.g. [1, 2, 3, 4, 5]
+std::vector<double> ParseDoubleArray(const std::string &value, size_t max_elements = 0)
+{
+	std::vector<double> result;
+
+	auto ptr = advance(value.c_str());
+	if (*ptr != '[') throw std::invalid_argument("unexpected character");
+
+	while (++ptr < value.c_str() + value.size())
+	{
+		ptr = advance(ptr);
+		if (*ptr == ']') break;
+
+		errno = 0;
+
+		char *end_ptr;
+		double element = std::strtod(ptr, &end_ptr);
+		if (errno != 0) throw std::invalid_argument("conversion error");
+		if (std::isnan(element)) throw std::invalid_argument("element is nan");
+		if (std::isinf(element)) throw std::invalid_argument("element is infinite");
+		
+		if (max_elements == 0 || result.size() < max_elements) result.push_back(element);
+		
+		ptr = advance(end_ptr);
+		if (*ptr == ']') break;
+		if (*ptr != ',') throw std::invalid_argument("unexpected character");
+	}
+
+	return result;
+}
+
+bool ParseBool(const std::string &value)
+{
+	if (_stricmp(value.c_str(), "true") == 0) return true;
+	if (_stricmp(value.c_str(), "false") == 0) return false;
+	return std::stoi(value) != 0;
+}
+
+std::string BoolToString(bool value)
+{
+	return value ? "true" : "false";
+}
+
+std::string DoubleArrayToString(const std::vector<double> &array)
+{
+	std::string buffer = "[";
+	for (size_t i = 0; i < array.size(); i++)
+	{
+		if (i > 0) buffer += ", ";
+		buffer += std::to_string(array[i]);
+	}
+	buffer += "]";
+	return buffer;
+}
 
 namespace Settings
 {
 	bool VSyncEnabled = false;
-	unsigned char FPSCapSelection = 0;
+	std::vector<double> FPSCapValues = { 30, 60, 75, 120, 144, 165, 240, 360 };
+	uint32_t FPSCapSelection = 0;
 	double FPSCap = 0.0;
 	bool UnlockClient = true;
 	bool UnlockStudio = false;
@@ -46,23 +110,25 @@ namespace Settings
 				try
 				{
 					if (key == "VSyncEnabled")
-						VSyncEnabled = std::stoi(value) != 0;
+						VSyncEnabled = ParseBool(value);
+					else if (key == "FPSCapValues")
+						FPSCapValues = ParseDoubleArray(value, 100);
 					else if (key == "FPSCapSelection")
-						FPSCapSelection = std::stoi(value);
+						FPSCapSelection = std::stoul(value);
 					else if (key == "FPSCap")
 						FPSCap = std::stod(value);
 					else if (key == "UnlockClient")
-						UnlockClient = std::stoi(value) != 0;
+						UnlockClient = ParseBool(value);
 					else if (key == "UnlockStudio")
-						UnlockStudio = std::stoi(value) != 0;
+						UnlockStudio = ParseBool(value);
 					else if (key == "CheckForUpdates")
-						CheckForUpdates = std::stoi(value) != 0;
+						CheckForUpdates = ParseBool(value);
 					else if (key == "NonBlockingErrors")
-						NonBlockingErrors = std::stoi(value) != 0;
+						NonBlockingErrors = ParseBool(value);
 					else if (key == "SilentErrors")
-						SilentErrors = std::stoi(value) != 0;
+						SilentErrors = ParseBool(value);
 					else if (key == "QuickStart")
-						QuickStart = std::stoi(value) != 0;
+						QuickStart = ParseBool(value);
 				}
 				catch (std::exception& e)
 				{
@@ -70,6 +136,20 @@ namespace Settings
 				}
 			}
 		}
+
+		if (FPSCapSelection > 0 && FPSCapSelection > FPSCapValues.size())
+		{
+			FPSCapSelection = 0;
+		}
+
+		for (double &value : FPSCapValues)
+		{
+			value = std::fmin(std::fmax(value, -2147483648.0), 2147483647.0);
+		}
+
+		FPSCap = FPSCapSelection == 0 ? 0.0 : FPSCapValues[FPSCapSelection - 1];
+
+		Update();
 
 		return true;
 	}
@@ -81,14 +161,15 @@ namespace Settings
 
 		printf("Saving settings to file...\n");
 
-		file << "UnlockClient=" << std::to_string(UnlockClient) << std::endl;
-		file << "UnlockStudio=" << std::to_string(UnlockStudio) << std::endl;
+		file << "UnlockClient=" << BoolToString(UnlockClient) << std::endl;
+		file << "UnlockStudio=" << BoolToString(UnlockStudio) << std::endl;
+		file << "FPSCapValues=" << DoubleArrayToString(FPSCapValues) << std::endl;
 		file << "FPSCapSelection=" << std::to_string(FPSCapSelection) << std::endl;
 		file << "FPSCap=" << std::to_string(FPSCap) << std::endl;
-		file << "CheckForUpdates=" << std::to_string(CheckForUpdates) << std::endl;
-		file << "NonBlockingErrors=" << std::to_string(NonBlockingErrors) << std::endl;
-		file << "SilentErrors=" << std::to_string(SilentErrors) << std::endl;
-		file << "QuickStart=" << std::to_string(QuickStart) << std::endl;
+		file << "CheckForUpdates=" << BoolToString(CheckForUpdates) << std::endl;
+		file << "NonBlockingErrors=" << BoolToString(NonBlockingErrors) << std::endl;
+		file << "SilentErrors=" << BoolToString(SilentErrors) << std::endl;
+		file << "QuickStart=" << BoolToString(QuickStart) << std::endl;
 
 		return true;
 	}

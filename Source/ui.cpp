@@ -23,14 +23,7 @@
 #define RFU_TRAYMENU_CLIENT		WM_APP + 13
 
 #define RFU_FCS_FIRST			(WM_APP + 20)
-#define RFU_FCS_NONE			RFU_FCS_FIRST + 0
-#define RFU_FCS_30				RFU_FCS_FIRST + 1
-#define RFU_FCS_60				RFU_FCS_FIRST + 2
-#define RFU_FCS_75				RFU_FCS_FIRST + 3
-#define RFU_FCS_120				RFU_FCS_FIRST + 4
-#define RFU_FCS_144				RFU_FCS_FIRST + 5
-#define RFU_FCS_240				RFU_FCS_FIRST + 6
-#define RFU_FCS_LAST			(RFU_FCS_240)
+#define RFU_FCS_NONE			RFU_FCS_FIRST
 
 HWND UI::Window = NULL;
 int UI::AttachedProcessesCount = 0;
@@ -64,13 +57,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			HMENU submenu = CreatePopupMenu();
 			AppendMenu(submenu, MF_STRING, RFU_FCS_NONE, "None");
-			AppendMenu(submenu, MF_STRING, RFU_FCS_30, "30");
-			AppendMenu(submenu, MF_STRING, RFU_FCS_60, "60");
-			AppendMenu(submenu, MF_STRING, RFU_FCS_75, "75");
-			AppendMenu(submenu, MF_STRING, RFU_FCS_120, "120");
-			AppendMenu(submenu, MF_STRING, RFU_FCS_144, "144");
-			AppendMenu(submenu, MF_STRING, RFU_FCS_240, "240");
-			CheckMenuRadioItem(submenu, RFU_FCS_FIRST, RFU_FCS_LAST, RFU_FCS_FIRST + Settings::FPSCapSelection, MF_BYCOMMAND);
+			for (size_t i = 0; i < Settings::FPSCapValues.size(); i++)
+			{
+				double value = Settings::FPSCapValues[i];
+
+				char name[16] = { 0 };
+				if (static_cast<int>(value) == value)
+					snprintf(name, sizeof(name), "%d", static_cast<int>(value));
+				else
+					snprintf(name, sizeof(name), "%.2f", value);
+
+				AppendMenu(submenu, MF_STRING, RFU_FCS_NONE + i + 1, name);
+			}
+			CheckMenuRadioItem(submenu, RFU_FCS_FIRST, RFU_FCS_FIRST + Settings::FPSCapValues.size(), RFU_FCS_FIRST + Settings::FPSCapSelection, MF_BYCOMMAND);
 			AppendMenu(popup, MF_POPUP, (UINT_PTR)submenu, "FPS Cap");
 
 			HMENU advanced = CreatePopupMenu();
@@ -146,11 +145,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 				default:
 					if (result >= RFU_FCS_FIRST
-						&& result <= RFU_FCS_LAST)
+						&& result <= RFU_FCS_FIRST + Settings::FPSCapValues.size())
 					{
-						static double fcs_map[] = { 0.0, 30.0, 60.0, 75.0, 120.0, 144.0, 240.0 };
 						Settings::FPSCapSelection = result - RFU_FCS_FIRST;
-						Settings::FPSCap = fcs_map[Settings::FPSCapSelection];
+						Settings::FPSCap = Settings::FPSCapSelection == 0 ? 0.0 : Settings::FPSCapValues[Settings::FPSCapSelection - 1];
 					}
 				}
 

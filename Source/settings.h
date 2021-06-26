@@ -1,9 +1,12 @@
 #pragma once
 
+#include <vector>
+
 namespace Settings
 {
 	extern bool VSyncEnabled;
-	extern unsigned char FPSCapSelection;
+	extern std::vector<double> FPSCapValues;
+	extern uint32_t FPSCapSelection;
 	extern double FPSCap;
 	extern bool UnlockClient;
 	extern bool UnlockStudio;
