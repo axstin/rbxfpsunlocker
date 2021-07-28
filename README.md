@@ -1,3 +1,6 @@
+# DUE TO A ROBLOX UPDATE, RBXFPSUNLOCKER IS NOT USABLE
+## There will be an update later today posted here when it is usable again.
+
 ## Usage
 1. Download the latest release from https://github.com/axstin/rbxfpsunlocker/releases
 2. Extract `rbxfpsunlocker-x64.zip` or `rbxfpsunlocker-x86.zip` into a folder
