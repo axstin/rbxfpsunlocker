@@ -157,9 +157,10 @@ const void *FindTaskScheduler(HANDLE process, const char **error = nullptr)
 		}
 		else
 		{
-			if (auto result = (const uint8_t *)ProcUtil::ScanProcess(process, "\x55\x8B\xEC\xE8\x00\x00\x00\x00\x8A\x4D\x08\x83\xC0\x04\x86\x08\x5D\xC3", "xxxx????xxxxxxxxxx", start, end))
+			// 55 8B EC 83 E4 F8 83 EC 08 E8 ?? ?? ?? ?? 8D 0C 24
+			if (auto result = (const uint8_t *)ProcUtil::ScanProcess(process, "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x08\xE8\x00\x00\x00\x00\x8D\x0C\x24", "xxxxxxxxxx????xxx", start, end))
 			{
-				auto gts_fn = result + 8 + ProcUtil::Read<int32_t>(process, result + 4);
+				auto gts_fn = result + 14 + ProcUtil::Read<int32_t>(process, result + 10);
 
 				printf("[%p] GetTaskScheduler: %p\n", process, gts_fn);
 
