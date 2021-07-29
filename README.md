@@ -6,7 +6,7 @@
 
 ## Submitting an Issue
 
-**NOTICE: Issues are currently closed due to spam and number of non-issues or low quality submissions. They will be reopened once I have the time and capacity to moderate them. Sorry!**
+**NOTICE: Issues are currently closed due to spam and the number of non-issues or low quality submissions. They will be reopened once I have the time and capacity to moderate them. Sorry!**
 
 Before [submitting an issue](https://github.com/axstin/rbxfpsunlocker/issues/new), please:
 - Make sure you submit an issue or suggestion
@@ -42,7 +42,7 @@ This being said, if you know your computer is powerful enough but still aren't s
 
 5. **Can I set a custom framerate cap?**
 
-Custom framerate limits can be set by changing the `FPSCap` value inside the `settings` file located in the same folder as `rbxfpsunlocker.exe` and reloading settings (RFU->Load Settings). Changing the cap with RFU's menu will reset/overwrite this value.
+You can create your own list of FPS cap values by editing the `FPSCapValues` array inside the `settings` file located in the same folder as `rbxfpsunlocker.exe`.
 
 6. **Does this work for Mac?**
 
