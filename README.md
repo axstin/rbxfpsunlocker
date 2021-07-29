@@ -6,6 +6,8 @@
 
 ## Submitting an Issue
 
+**NOTICE: Issues are currently closed due to spam and number of non-issues or low quality submissions. They will be reopened once I have the time and capacity to moderate them. Sorry!**
+
 Before [submitting an issue](https://github.com/axstin/rbxfpsunlocker/issues/new), please:
 - Make sure you submit an issue or suggestion
 - Make sure your question or problem cannot be answered in the FAQ below
@@ -20,9 +22,9 @@ Issues submitted not attempting to follow these guidelines will be closed or del
 
 ## FAQ
 
-1. **Some files are being deleted and/or my anti-virus is detecting rbxfpsunlocker as malware. What do I do?**
+1. **Roblox is force-closing, files are being deleted, and/or my anti-virus is detecting rbxfpsunlocker as malware. What do I do?**
 
-Any detections are most likely a false positive. If you don't trust me, feel free to download the repository and compile the project from source. Otherwise, add an exception to your anti-virus for `rbxfpsunlocker.exe` (or the folder it is in).
+All detections are false positives. Internally, RFU "tampers" with running Roblox processes in order to uncap framerate and can appear as suspicious to an anti-virus. For reasons unbeknownst to me, 32-bit builds of RFU garner many more false positive detections than 64-bit builds and are no longer included in new releases. If you don't trust me, feel free to download the repository, review the source code, and compile the project yourself with Visual Studio 2019. Otherwise, add an exception to your anti-virus for `rbxfpsunlocker.exe` (or the folder it is in).
 
 2. **How can I see my FPS?**
 
