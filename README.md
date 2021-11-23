@@ -1,15 +1,22 @@
-## Usage
-1. Download the latest release from https://github.com/axstin/rbxfpsunlocker/releases
-2. Extract `rbxfpsunlocker-x64.zip` or `rbxfpsunlocker-x86.zip` into a folder
+# <img alt="icon" src="icon.ico" width="48"> Roblox FPS Unlocker
+A small tool to remove Roblox's default 60 FPS cap.
 
-- Alternatively, you can install it via [Scoop](https://scoop.sh/):
+## Installation
+
+- [Scoop](https://scoop.sh/)
 ```shell
 scoop bucket add games
 scoop install rbxfpsunlocker
 ```
 
-4. Run `rbxfpsunlocker.exe` before or after starting Roblox
-5. Enjoy those [beautiful frames](https://i.imgur.com/vsLf04O.png) 👌
+- Manual
+1. Download the latest release from the [Releases page](https://github.com/axstin/rbxfpsunlocker/releases) 
+2. Extract `rbxfpsunlocker-x64.zip` or `rbxfpsunlocker-x86.zip` into a folder
+
+
+## Usage
+1. Run `rbxfpsunlocker.exe` before or after starting Roblox
+2. Enjoy those [beautiful frames](https://i.imgur.com/vsLf04O.png) 👌
 
 ## Submitting an Issue
 
