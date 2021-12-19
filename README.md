@@ -4,6 +4,8 @@
 3. Run `rbxfpsunlocker.exe` before or after starting Roblox
 4. Enjoy those [beautiful frames](https://i.imgur.com/vsLf04O.png) 👌
 
+Alternatively, RFU is available on [Scoop](https://scoop.sh/). <sup>[1](https://github.com/Calinou/scoop-games/blob/master/bucket/rbxfpsunlocker.json)</sup>
+
 ## Submitting an Issue
 
 **NOTICE: Issues are currently closed due to spam and the number of non-issues or low quality submissions. They will be reopened once I have the time and capacity to moderate them. Sorry!**
