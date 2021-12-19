@@ -147,7 +147,7 @@ const void *FindTaskScheduler(HANDLE process, const char **error = nullptr)
 				uint8_t buffer[0x100];
 				if (ProcUtil::Read(process, gts_fn, buffer, sizeof(buffer)))
 				{
-					if (auto inst = sigscan::scan("\x48\x8B\x05\x00\x00\x00\x00\x48\x83\xC4\x38", "xxx????xxxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
+					if (auto inst = sigscan::scan("\x48\x8B\x05\x00\x00\x00\x00\x48\x83\xC4\x28", "xxx????xxxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
 					{
 						const uint8_t *remote = gts_fn + (inst - buffer);
 						return remote + 7 + *(int32_t *)(inst + 3);
