@@ -262,7 +262,7 @@ struct RobloxProcess
 						return;
 					}
 
-					printf("[%p] Frame Delay Offset: %zu (%x)\n", handle, delay_offset, delay_offset);
+					printf("[%p] Frame Delay Offset: %zu (%zx)\n", handle, delay_offset, delay_offset);
 
 					fd_ptr = scheduler + delay_offset;
 
