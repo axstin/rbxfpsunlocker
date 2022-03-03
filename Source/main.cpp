@@ -22,7 +22,13 @@ std::vector<HANDLE> GetRobloxProcesses(bool include_client = true, bool include_
 	std::vector<HANDLE> result;
 	if (include_client)
 	{
-		for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxPlayerBeta.exe")) result.emplace_back(handle);
+		for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxPlayerBeta.exe"))
+		{
+			// Roblox has a security daemon process that runs under the same name as the client (as of 3/2/22 update). Don't unlock it.
+			BOOL debugged = FALSE;
+			CheckRemoteDebuggerPresent(handle, &debugged);
+			if (!debugged) result.emplace_back(handle);
+		}
 		for (HANDLE handle : ProcUtil::GetProcessesByImageName("Windows10Universal.exe")) result.emplace_back(handle);
 	}
 	if (include_studio) for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxStudioBeta.exe")) result.emplace_back(handle);
