@@ -131,7 +131,7 @@ const void *FindTaskScheduler(HANDLE process, const char **error = nullptr)
 			}
 			else
 			{
-				if (error) *error = "Failed to get process base! Restart Roblox FPS Unlocker.";
+				if (error) *error = "Failed to get process base! Restart Roblox FPS Unlocker or, if you are on a 64-bit operating system, make sure you are using the 64-bit version of Roblox FPS Unlocker.";
 				return nullptr;
 			}
 		}

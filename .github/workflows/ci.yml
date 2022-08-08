@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+        platform: [x64, x86]
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v1.1
+
+    - name: Build Solution
+      run: msbuild "-p:Configuration=${{ matrix.configuration }};Platform=${{ matrix.platform }}" rbxfpsunlocker.sln
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: rbxfpsunlocker (${{ matrix.configuration }}, ${{ matrix.platform }})
+        path: ${{ matrix.platform == 'x86' && '.' || matrix.platform }}\${{ matrix.configuration }}\*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Get tag version
+        id: get_version
+        uses: battila7/get-version-action@v2
+      - name: Download release binary (x64)
+        uses: actions/download-artifact@v3
+        with:
+          name: rbxfpsunlocker (Release, x64)
+          path: x64
+      - name: Zip binaries
+        run: zip -9 rbxfpsunlocker-x64.zip x64/rbxfpsunlocker.exe
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          files: rbxfpsunlocker-x64.zip
+          name: Roblox FPS Unlocker ${{ steps.get_version.outputs.version }}
