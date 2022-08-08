@@ -48,7 +48,9 @@ You can create your own list of FPS cap values by editing the `FPSCapValues` arr
 
 6. **Does this work for Mac?**
 
-No. Roblox FPS Unlocker was written only for the Windows platform and I [currently have no plans to change this](https://github.com/axstin/rbxfpsunlocker/issues/49). However, you can use [@lanylow](https://github.com/lanylow)'s [fork](https://github.com/lanylow/rbxfpsunlocker-osx/releases) for macOS usage instead.
+No. Roblox FPS Unlocker was written only for the Windows platform and I [currently have no plans to change this](https://github.com/axstin/rbxfpsunlocker/issues/49).
+
+**Update:** A Mac version developed and maintained by [lanylow](https://github.com/lanylow) can be found [here!](https://github.com/lanylow/rbxfpsunlocker-osx)
 
 7. **Why do I get a "Failed to connect to Github" error?**
 
