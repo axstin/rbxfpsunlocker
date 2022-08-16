@@ -4,7 +4,7 @@
 #include <Lmcons.h>
 #include <filesystem>
 
-bool MoveFileToStartup() {
+void MoveFileToStartup() {
     char buffer[256];
     sprintf_s(buffer, "Would you like to move Roblox FPS Unlocker to the system start up folder?");
     if (MessageBoxA(NULL, buffer, "Autostart Confirmation", MB_YESNOCANCEL | MB_ICONINFORMATION) == IDYES)
@@ -29,5 +29,4 @@ bool MoveFileToStartup() {
 		}
 
     }
-    return true;
 }
