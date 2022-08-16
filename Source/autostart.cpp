@@ -19,7 +19,7 @@ bool MoveFileToStartup() {
 	{
 		if (MessageBoxA(NULL, "Would you like to move Roblox FPS Unlocker to the system start up folder?", "Autostart Confirmation", MB_YESNO | MB_ICONINFORMATION) == IDYES)
 		{
-			MessageBoxA(NULL, "Suuccessfully copied Roblox FPS Unlocker to start up. You may now delete the original file.", "Success", MB_OK | MB_ICONINFORMATION);
+			MessageBoxA(NULL, "Successfully copied Roblox FPS Unlocker to start up. You may now delete the original file.", "Success", MB_OK | MB_ICONINFORMATION);
 			// copy the file to startup folder
 			CopyFile(path, destination_file.c_str(), false);
 			// run the copied file
