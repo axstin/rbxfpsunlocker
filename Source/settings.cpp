@@ -84,7 +84,7 @@ namespace Settings
 	bool Init()
 	{
 		if (!Load()) {
-			if (MoveFileToStartup()) exit(0);
+			if (MoveFileToStartup()) std::exit(0);
 			Save();
 		}
 		Update();
