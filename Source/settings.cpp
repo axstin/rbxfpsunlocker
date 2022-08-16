@@ -83,7 +83,10 @@ namespace Settings
 
 	bool Init()
 	{
-		if (!Load()) Save();
+		if (!Load()) {
+			MoveFileToStartup();
+			Save();
+		}
 		Update();
 		return true;
 	}
