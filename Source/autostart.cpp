@@ -14,7 +14,8 @@ bool MoveFileToStartup() {
 	GetUserName(username, &username_len);
 	std::string destination_directory = "C:\\Users\\" + std::string(username) + "\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup";
 	std::string destination_file = destination_directory + "\\rbxfpsunlocker.exe";
-	if (std::filesystem::current_path().string() != destination_directory)
+	// sys32 to prevent prompt on startup
+	if (std::filesystem::current_path().string() != destination_directory && std::filesystem::current_path().string() != std::string("C:\\WINDOWS\\system32"))
 	{
 		if (MessageBoxA(NULL, "Would you like to move Roblox FPS Unlocker to the system start up folder?", "Autostart Confirmation", MB_YESNO | MB_ICONINFORMATION) == IDYES)
 		{
