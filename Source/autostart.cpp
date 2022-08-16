@@ -12,17 +12,17 @@ bool MoveFileToStartup() {
 	char username[UNLEN + 1];
 	DWORD username_len = UNLEN + 1;
 	GetUserName(username, &username_len);
-	std::string destinationPath = "C:\\Users\\" + std::string(username) + "\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\rbxfpsunlocker.exe";
-	if (path != destinationPath)
+	std::string destination_directory = "C:\\Users\\" + std::string(username) + "\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup";
+	std::string destination_file = destination_directory + "\\rbxfpsunlocker.exe";
+	if (std::filesystem::current_path().string() != destination_directory)
 	{
-		char buffer[256];
-		sprintf_s(buffer, "Would you like to move Roblox FPS Unlocker to the system start up folder?");
-		if (MessageBoxA(NULL, buffer, "Autostart Confirmation", MB_YESNOCANCEL | MB_ICONINFORMATION) == IDYES)
+		if (MessageBoxA(NULL, "Would you like to move Roblox FPS Unlocker to the system start up folder?", "Autostart Confirmation", MB_YESNO | MB_ICONINFORMATION) == IDYES)
 		{
+			MessageBoxA(NULL, "Suuccessfully copied Roblox FPS Unlocker to start up. You may now delete the original file.", "Success", MB_OK | MB_ICONINFORMATION);
 			// copy the file to startup folder
-			CopyFile(path, destinationPath.c_str(), false);
+			CopyFile(path, destination_file.c_str(), false);
 			// run the copied file
-			ShellExecute(NULL, "open", destinationPath.c_str(), NULL, NULL, SW_SHOWDEFAULT);
+			ShellExecute(NULL, "open", destination_file.c_str(), NULL, destination_directory.c_str(), SW_SHOWDEFAULT);
 			return true;
 		}
 
