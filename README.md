@@ -1,4 +1,7 @@
 ## Usage
+
+**By continuing you have read the disclaimers below and accept the risks of using RFU.**
+
 1. Download the latest release from https://github.com/axstin/rbxfpsunlocker/releases
 2. Extract `rbxfpsunlocker-x64.zip` into a folder
 3. Run `rbxfpsunlocker.exe` before or after starting Roblox
@@ -11,6 +14,7 @@ Alternatively, RFU is available on [Scoop](https://scoop.sh/). <sup>[1](https://
 **NOTICE: Issues are currently closed due to spam and the number of non-issues or low quality submissions. They will be reopened once I have the time and capacity to moderate them. Sorry!**
 
 Before [submitting an issue](https://github.com/axstin/rbxfpsunlocker/issues/new), please:
+
 - Make sure you submit an issue or suggestion
 - Make sure your question or problem cannot be answered in the FAQ below
 - Please read previous issues to make sure your question was not asked before
@@ -64,7 +68,7 @@ This means RFU was unable to find the internal variable responsible for uncappin
 
 RFU does not install itself anywhere. It can be deleted by simply exiting the program if it is open (tray icon->Exit) and deleting `rbxfpsunlocker.exe`.
 
-##  Disclaimer
+## Disclaimer
 
 Around June 21st, 2018 I received reports that Roblox was [handing out bans](https://i.imgur.com/i4NEGB0.png) to players using this tool. Roblox most likely assumes that `rbxfpsunlocker.dll` is an exploit or a cheat. I fixed this issue in [release 1.6](https://github.com/axstin/rbxfpsunlocker/releases/tag/v1.6) and can confirm injecting rbxfpsunlocker is now "invisible" to Roblox. **HOWEVER, this won't stop Roblox from releasing a new detection in the future. Please use this tool at your own risk** and keep in touch with this repository for updates.
 
@@ -74,4 +78,4 @@ Around June 21st, 2018 I received reports that Roblox was [handing out bans](htt
 
 **EDIT (August 11, 2019):** At the engineering panel on day 1 of RDC 2019, Adam Miller, VP of Engineering & Technology at Roblox, made a personal guarantee that anyone using Roblox FPS Unlocker will not be banned from Roblox. This was in response to the question "Why does Roblox have a FPS cap and why is it against the rules to change that cap?" to which [Arseny Kapoulkine (zeuxcg)](https://twitter.com/zeuxcg) also revealed that Roblox will be adding support for "higher refresh rate monitors" potentially by next year. [See the video here!](https://youtu.be/5gNzFsJlFbo?t=143)
 
-
+**EDIT (October 27, 2022):** Roblox recently announced their purchasing of anti-cheat company Byfron Technologies who currently develop anti-cheat for games like Fortnite, Apex Legends and more. After observing what has happened to these games internally, the changes made could/will stop the unlocker from working and may issue _false_ bans. By continuing to use rbxfpsunlocker you are at risk of being falsely banned on account and/or hardware levels. We do not know when the anti-cheat will be introduced or how strict it will be. Upon reports of false positive bans or the introduction of any anti-cheat code we will try to update this GitHub page as soon as possible.
