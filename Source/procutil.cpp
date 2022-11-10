@@ -81,7 +81,7 @@ ProcUtil::ModuleInfo ProcUtil::GetModuleInfo(HANDLE process, HMODULE module)
 
 		bool found;
 
-		printf("ProcUtil::GetModuleInfo: buffer = %s\n", buffer);
+		printf("[ProcUtil] QueryFullProcessImageName(%p) returned %s\n", process, buffer);
 
 		try
 		{
@@ -89,7 +89,7 @@ ProcUtil::ModuleInfo ProcUtil::GetModuleInfo(HANDLE process, HMODULE module)
 		}
 		catch (WindowsException& e)
 		{
-			printf("[%p] ProcUtil::GetModuleInfo failed: %s (%X)\n", process, e.what(), e.GetLastError());
+			printf("[ProcUtil] GetModuleInfo(%p, NULL) failed: %s (%X)\n", process, e.what(), e.GetLastError());
 			found = false;
 		}
 
@@ -122,7 +122,7 @@ ProcUtil::ModuleInfo ProcUtil::GetModuleInfo(HANDLE process, HMODULE module)
 
 bool ProcUtil::FindModuleInfo(HANDLE process, const std::filesystem::path& path, ModuleInfo& out)
 {
-	printf("ProcUtil::FindModuleInfo: path = %s\n", path.string().c_str());
+	printf("[ProcUtil] FindModuleInfo(%p, %s)\n", process, path.string().c_str());
 
 	for (auto module : GetProcessModules(process))
 	{
@@ -130,7 +130,7 @@ bool ProcUtil::FindModuleInfo(HANDLE process, const std::filesystem::path& path,
 		{
 			ModuleInfo info = GetModuleInfo(process, module);
 
-			printf("ProcUtil::FindModuleInfo: info.path = %s\n", path.string().c_str());
+			printf("\tbase=%p, size=%zu, path=%s\n", info.base, info.size, info.path.string().c_str());
 
 			if (std::filesystem::equivalent(info.path, path))
 			{
