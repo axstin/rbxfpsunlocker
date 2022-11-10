@@ -37,9 +37,6 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
-      - name: Get tag version
-        id: get_version
-        uses: battila7/get-version-action@v2
       - name: Download release binary (x64)
         uses: actions/download-artifact@v3
         with:
@@ -52,4 +49,4 @@ jobs:
         with:
           draft: true
           files: rbxfpsunlocker-x64.zip
-          name: Roblox FPS Unlocker ${{ steps.get_version.outputs.version }}
+          name: Roblox FPS Unlocker ${{ github.ref_name }}
