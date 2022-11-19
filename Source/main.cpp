@@ -207,13 +207,15 @@ struct RobloxProcess
 						}
 					}
 				}
-			} else
+			} 
+			else
 			{
 				// old signature (LTCG): 55 8B EC 83 E4 F8 83 EC 08 E8 ?? ?? ?? ?? 8D 0C 24
-				// 55 8B EC 83 EC 10 56 E8 ?? ?? ?? ?? 8B F0 8D 45 F0
-				if (auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x55\x8B\xEC\x83\xEC\x10\x56\xE8\x00\x00\x00\x00\x8B\xF0\x8D\x45\xF0", "xxxxxxxx????xxxxx", start, end))
+				//           roblox 553: 55 8B EC 83 EC 10 56 E8 ?? ?? ?? ?? 8B F0 8D 45 F0
+				//           roblox 554: 55 8B EC 6A FF 68 ?? ?? ?? ?? 64 A1 00 00 00 00 50 64 89 25 00 00 00 00 83 EC 0C 56 57 E8 ?? ?? ?? ?? 8B F0
+				if (auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x55\x8B\xEC\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x0C\x56\x57\xE8\x00\x00\x00\x00\x8B\xF0", "xxxxxx????xxxxxxxxxxxxxxxxxxxx????xx", start, end))
 				{
-					auto gts_fn = result + 12 + ProcUtil::Read<int32_t>(handle, result + 8);
+					auto gts_fn = result + 34 + ProcUtil::Read<int32_t>(handle, result + 30);
 
 					printf("[%p] GetTaskScheduler (sig 1): %p\n", handle, gts_fn);
 
