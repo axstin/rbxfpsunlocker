@@ -195,7 +195,7 @@ struct RobloxProcess
 				{
 					auto gts_fn = result + 14 + ProcUtil::Read<int32_t>(handle, result + 10);
 
-					printf("[%p] GetTaskScheduler (sig 0): %p\n", handle, gts_fn);
+					printf("[%p] GetTaskScheduler (sig studio): %p\n", handle, gts_fn);
 
 					uint8_t buffer[0x100];
 					if (ProcUtil::Read(handle, gts_fn, buffer, sizeof(buffer)))
@@ -209,13 +209,29 @@ struct RobloxProcess
 				}
 			} else
 			{
-				// old signature (LTCG): 55 8B EC 83 E4 F8 83 EC 08 E8 ?? ?? ?? ?? 8D 0C 24
+				// 55 8B EC 83 E4 F8 83 EC 08 E8 ?? ?? ?? ?? 8D 0C 24
+				if (auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x08\xE8\xDE\xAD\xBE\xEF\x8D\x0C\x24", "xxxxxxxxxx????xxx", start, end))
+				{
+					auto gts_fn = result + 14 + ProcUtil::Read<int32_t>(handle, result + 10);
+
+					printf("[%p] GetTaskScheduler (sig ltcg): %p\n", handle, gts_fn);
+
+					uint8_t buffer[0x100];
+					if (ProcUtil::Read(handle, gts_fn, buffer, sizeof(buffer)))
+					{
+						if (auto inst = sigscan::scan("\xA1\x00\x00\x00\x00\x8B\x4D\xF4", "x????xxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
+						{
+							//printf("[%p] Inst: %p\n", process, gts_fn + (inst - buffer));
+							return (const void *)(*(uint32_t *)(inst + 1));
+						}
+					}
+				}
 				// 55 8B EC 83 EC 10 56 E8 ?? ?? ?? ?? 8B F0 8D 45 F0
-				if (auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x55\x8B\xEC\x83\xEC\x10\x56\xE8\x00\x00\x00\x00\x8B\xF0\x8D\x45\xF0", "xxxxxxxx????xxxxx", start, end))
+				else if (auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x55\x8B\xEC\x83\xEC\x10\x56\xE8\x00\x00\x00\x00\x8B\xF0\x8D\x45\xF0", "xxxxxxxx????xxxxx", start, end))
 				{
 					auto gts_fn = result + 12 + ProcUtil::Read<int32_t>(handle, result + 8);
 
-					printf("[%p] GetTaskScheduler (sig 1): %p\n", handle, gts_fn);
+					printf("[%p] GetTaskScheduler (sig non-ltcg): %p\n", handle, gts_fn);
 
 					uint8_t buffer[0x100];
 					if (ProcUtil::Read(handle, gts_fn, buffer, sizeof(buffer)))
@@ -232,7 +248,7 @@ struct RobloxProcess
 				{
 					auto gts_fn = result + 15 + ProcUtil::Read<int32_t>(handle, result + 11);
 
-					printf("[%p] GetTaskScheduler (sig 2): %p\n", handle, gts_fn);
+					printf("[%p] GetTaskScheduler (sig uwp): %p\n", handle, gts_fn);
 
 					uint8_t buffer[0x100];
 					if (ProcUtil::Read(handle, gts_fn, buffer, sizeof(buffer)))
@@ -280,6 +296,7 @@ struct RobloxProcess
 
 		if (!ts_ptr)
 		{
+			const auto start_time = std::chrono::steady_clock::now();
 			ts_ptr = FindTaskScheduler();
 
 			if (!ts_ptr)
@@ -287,6 +304,11 @@ struct RobloxProcess
 				if (retries_left-- <= 0)
 					NotifyError("rbxfpsunlocker Error", "Unable to find TaskScheduler! This is probably due to a Roblox update-- watch the github for any patches or a fix.");
 				return;
+			}
+			else
+			{
+				const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
+				printf("[%p] Found TaskScheduler address in %lldms\n", handle, elapsed);
 			}
 		}
 

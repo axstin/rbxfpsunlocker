@@ -43,7 +43,8 @@ jobs:
           name: rbxfpsunlocker (Release, x64)
           path: x64
       - name: Zip binaries
-        run: zip -9 rbxfpsunlocker-x64.zip x64/rbxfpsunlocker.exe
+        run: zip -9 ../rbxfpsunlocker-x64.zip rbxfpsunlocker.exe
+        working-directory: ./x64
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
