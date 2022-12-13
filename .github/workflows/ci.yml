@@ -21,7 +21,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v1.1
+      uses: microsoft/setup-msbuild@v1.2
 
     - name: Build Solution
       run: msbuild "-p:Configuration=${{ matrix.configuration }};Platform=${{ matrix.platform }}" rbxfpsunlocker.sln
