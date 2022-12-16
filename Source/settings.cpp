@@ -71,7 +71,7 @@ std::string DoubleArrayToString(const std::vector<double> &array)
 namespace Settings
 {
 	bool VSyncEnabled = false;
-	std::vector<double> FPSCapValues = { 30, 60, 75, 120, 144, 165, 240, 360 };
+	std::vector<double> FPSCapValues = { 48, 60, 75, 120, 144, 165, 240, 360 };
 	uint32_t FPSCapSelection = 0;
 	double FPSCap = 0.0;
 	bool UnlockClient = true;
