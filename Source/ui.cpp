@@ -195,12 +195,11 @@ void UI::CreateHiddenConsole()
 		EnableMenuItem(menu, SC_CLOSE, MF_GRAYED);
 	}
 
-#ifdef _WIN64
-	SetConsoleTitleA("Roblox FPS Unlocker " RFU_VERSION " (64-bit) Console");
-#else
-	SetConsoleTitleA("Roblox FPS Unlocker " RFU_VERSION " (32-bit) Console");
-#endif
+	std::string version = GetExecutableVersion();
+	char titleBuf[48];
+	sprintf(titleBuf, "Roblox FPS Unlocker %s (%d-bit) Console", version.c_str(), _WIN64 ? 64 : 32);
 
+	SetConsoleTitleA(titleBuf);
 	SetConsoleVisible(false);
 }
 
