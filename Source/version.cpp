@@ -7,6 +7,7 @@
 
 #include <string>
 #include <regex>
+#include <sstream>
 
 bool HttpRequest(const char *url, std::string &response)
 {
@@ -56,11 +57,12 @@ bool CheckForUpdates()
 	}
 
 	std::string latest_version = matches[1].str();
+	std::string current_version = GetExecutableVersion();
 
-	if (latest_version != RFU_VERSION)
+	if (latest_version != current_version)
 	{
 		char buffer[256];
-		sprintf_s(buffer, "A new version of Roblox FPS Unlocker is available.\n\nCurrent Version: %s\nLatest Version: %s\n\nVisit download page?", RFU_VERSION, latest_version.c_str());
+		sprintf_s(buffer, "A new version of Roblox FPS Unlocker is available.\n\nCurrent Version: %s\nLatest Version: %s\n\nVisit download page?", current_version.c_str(), latest_version.c_str());
 
 		if (MessageBoxA(NULL, buffer, "Update Check", MB_YESNOCANCEL | MB_ICONEXCLAMATION) == IDYES)
 		{
@@ -70,4 +72,47 @@ bool CheckForUpdates()
 	}
 
 	return false;
+}
+
+// https://stackoverflow.com/a/940743
+const std::string GetExecutableVersion()
+{
+	DWORD verHandle = 0;
+	UINT size = 0;
+	LPBYTE lpBuffer = NULL;
+	TCHAR szVersionFile[MAX_PATH];
+
+	GetModuleFileName(NULL, szVersionFile, MAX_PATH);
+	DWORD verSize = GetFileVersionInfoSize(szVersionFile, &verHandle);
+
+	if (verSize != NULL)
+	{
+		LPSTR verData = new char[verSize];
+
+		if (GetFileVersionInfo(szVersionFile, verHandle, verSize, verData))
+		{
+			if (VerQueryValue(verData, "\\", (VOID FAR * FAR*) & lpBuffer, &size))
+			{
+				if (size)
+				{
+					VS_FIXEDFILEINFO* verInfo = (VS_FIXEDFILEINFO*)lpBuffer;
+					if (verInfo->dwSignature == 0xfeef04bd)
+					{
+						int major = (verInfo->dwFileVersionMS >> 16) & 0xffff;
+						int minor = (verInfo->dwFileVersionMS >> 0) & 0xffff;
+						int build = (verInfo->dwFileVersionLS >> 16) & 0xffff;
+						int revision = (verInfo->dwFileVersionLS >> 0) & 0xffff; // unused in our case
+
+						std::stringstream ss;
+						ss << major << "." << minor << "." << build;
+						return ss.str();
+					}
+				}
+			}
+		}
+
+		delete[] verData;
+	}
+
+	return "???";
 }
