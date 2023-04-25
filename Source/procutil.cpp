@@ -42,81 +42,64 @@ HANDLE ProcUtil::GetProcessByImageName(const char* image_name)
 	return processes.size() > 0 ? processes[0] : NULL;
 }
 
-std::vector<HMODULE> ProcUtil::GetProcessModules(HANDLE process)
+std::vector<ProcUtil::ModuleInfo> ProcUtil::GetProcessModules(HANDLE process)
 {
-	std::vector<HMODULE> result;
+	std::vector<ProcUtil::ModuleInfo> result;
 
-	DWORD last = 0;
-	DWORD needed;
+	MODULEENTRY32 entry;
+	entry.dwSize = sizeof(MODULEENTRY32);
 
-	while (true)
+	HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, GetProcessId(process));
+	if (snapshot == INVALID_HANDLE_VALUE)
+		throw WindowsException("unable to enum modules");
+
+	if (Module32First(snapshot, &entry) == TRUE)
 	{
-		if (!EnumProcessModulesEx(process, result.data(), last, &needed, LIST_MODULES_ALL))
-			throw WindowsException("unable to enum modules");
-
-		result.resize(needed / sizeof(HMODULE));
-		if (needed <= last)	return result;
-		last = needed;
+		do
+		{
+			ProcUtil::ModuleInfo info{};
+			info.path = entry.szExePath;
+			info.base = entry.modBaseAddr;
+			info.size = entry.modBaseSize;
+			result.push_back(std::move(info));
+		} while (Module32Next(snapshot, &entry) == TRUE);
 	}
+
+	CloseHandle(snapshot);
+	return result;
 }
 
-ProcUtil::ModuleInfo ProcUtil::GetModuleInfo(HANDLE process, HMODULE module)
+
+ProcUtil::ModuleInfo ProcUtil::GetMainModuleInfo(HANDLE process)
 {
-	ModuleInfo result;
+	char buffer[MAX_PATH];
+	DWORD size = sizeof(buffer);
 
-	if (module == NULL)
+	if (!QueryFullProcessImageName(process, 0, buffer, &size)) // Requires at least PROCESS_QUERY_LIMITED_INFORMATION 
+		return {};
+
+	ModuleInfo result{};
+	bool found;
+
+	printf("[ProcUtil] QueryFullProcessImageName(%p) returned %s\n", process, buffer);
+
+	try
 	{
-		/*
-			GetModuleInformation works with hModule set to NULL with the caveat that lpBaseOfDll will be NULL aswell: https://doxygen.reactos.org/de/d86/dll_2win32_2psapi_2psapi_8c_source.html#l01102
-			Solutions: 
-				1) Enumerate modules in the process and compare file names
-				2) Use NtQueryInformationProcess with ProcessBasicInformation to find the base address (as done here: https://doxygen.reactos.org/de/d86/dll_2win32_2psapi_2psapi_8c_source.html#l00142)
-		*/
-
-		char buffer[MAX_PATH];
-		DWORD size = sizeof(buffer);
-
-		if (!QueryFullProcessImageName(process, 0, buffer, &size)) // Requires at least PROCESS_QUERY_LIMITED_INFORMATION 
-			throw WindowsException("unable to query process image name");
-
-		bool found;
-
-		printf("[ProcUtil] QueryFullProcessImageName(%p) returned %s\n", process, buffer);
-
-		try
-		{
-			found = FindModuleInfo(process, buffer, result);
-		}
-		catch (WindowsException& e)
-		{
-			printf("[ProcUtil] GetModuleInfo(%p, NULL) failed: %s (%X)\n", process, e.what(), e.GetLastError());
-			found = false;
-		}
-
-		if (!found) // Couldn't enum modules or GetModuleFileNameEx/GetModuleInformation failed
-		{
-			result.path = buffer;
-			result.base = nullptr;
-			result.size = 0;
-			result.entry_point = nullptr;
-		}
+		found = FindModuleInfo(process, buffer, result);
 	}
-	else
+	catch (WindowsException& e)
 	{
-		char buffer[MAX_PATH];
-		if (!GetModuleFileNameEx(process, module, buffer, sizeof(buffer))) // Requires PROCESS_QUERY_INFORMATION | PROCESS_VM_READ 
-			throw WindowsException("unable to get module file name");
+		printf("[ProcUtil] GetModuleInfo(%p, NULL) failed: %s (%X)\n", process, e.what(), e.GetLastError());
+		found = false;
+	}
 
-		MODULEINFO mi;
-		if (!GetModuleInformation(process, module, &mi, sizeof(mi))) // Requires PROCESS_QUERY_INFORMATION | PROCESS_VM_READ 
-			throw WindowsException("unable to get module information");
-
+	if (!found) // Couldn't enum modules or GetModuleFileNameEx/GetModuleInformation failed
+	{
 		result.path = buffer;
-		result.base = mi.lpBaseOfDll;
-		result.size = mi.SizeOfImage;
-		result.entry_point = mi.EntryPoint;
+		result.base = nullptr;
+		result.size = 0;
 	}
-
+	
 	return result;
 }
 
@@ -124,12 +107,10 @@ bool ProcUtil::FindModuleInfo(HANDLE process, const std::filesystem::path& path,
 {
 	printf("[ProcUtil] FindModuleInfo(%p, %s)\n", process, path.string().c_str());
 
-	for (auto module : GetProcessModules(process))
+	for (const auto &info : GetProcessModules(process))
 	{
 		try
 		{
-			ModuleInfo info = GetModuleInfo(process, module);
-
 			printf("\tbase=%p, size=%zu, path=%s\n", info.base, info.size, info.path.string().c_str());
 
 			if (std::filesystem::equivalent(info.path, path))

@@ -7,6 +7,7 @@
 #include <chrono>
 #include <fstream>
 #include <TlHelp32.h>
+#include <winternl.h>
 
 #pragma comment(lib, "Shlwapi.lib")
 #include <Shlwapi.h>
@@ -41,14 +42,14 @@ struct RobloxProcessHandle
 	RobloxProcessHandle(const RobloxProcessHandle &) = delete;
 	RobloxProcessHandle &operator=(const RobloxProcessHandle &) = delete;
 
-	RobloxProcessHandle(RobloxProcessHandle &&other)
+	RobloxProcessHandle(RobloxProcessHandle &&other) noexcept
 	{
 		std::swap(handle, other.handle);
 		std::swap(type, other.type);
 		std::swap(can_write, other.can_write);
 	}
 
-	RobloxProcessHandle &operator=(RobloxProcessHandle &&other)
+	RobloxProcessHandle &operator=(RobloxProcessHandle &&other) noexcept
 	{
 		if (this != &other)
 		{
@@ -69,7 +70,7 @@ struct RobloxProcessHandle
 		}
 	}
 
-	HANDLE CreateWriteHandle()
+	HANDLE CreateWriteHandle() const
 	{
 		HANDLE new_handle = NULL;
 		DuplicateHandle(GetCurrentProcess(), handle, GetCurrentProcess(), &new_handle, ROBLOX_WRITE_ACCESS, FALSE, NULL);
@@ -88,7 +89,7 @@ struct RobloxProcessHandle
 	}
 
 	template <typename T>
-	void Write(const void *location, const T &value)
+	void Write(const void *location, const T &value) const
 	{
 		if (can_write)
 		{
@@ -209,57 +210,14 @@ void NotifyError(const char* title, const char* error)
 	}
 }
 
-struct RobloxProcess
+class RobloxProcess
 {
 	RobloxProcessHandle process{};
 	ProcUtil::ModuleInfo main_module{};
 	std::vector<const void *> ts_ptr_candidates; // task scheduler pointer candidates
 	const void *fd_ptr = nullptr; // frame delay pointer
 	bool use_flags_file = false;
-
 	int retries_left = 0;
-
-	bool Attach(RobloxProcessHandle handle, int retry_count)
-	{
-		process = std::move(handle);
-		retries_left = retry_count;
-
-		if (!BlockingLoadModuleInfo())
-		{
-			NotifyError("rbxfpsunlocker Error", "Failed to get process base! Restart Roblox FPS Unlocker or, if you are on a 64-bit operating system, make sure you are using the 64-bit version of Roblox FPS Unlocker.");
-			retries_left = -1;
-			return false;
-		}
-		else
-		{
-			printf("[%p] Process base: %p (size %zu)\n", process.handle, main_module.base, main_module.size);
-
-			// Small windows exist where we can attach to Roblox's security daemon while it isn't being debugged (see GetRobloxProcesses)
-			// As a secondary measure, check module size (daemon is about 1MB, client is about 80MB)
-			if (main_module.size < 1024 * 1024 * 10)
-			{
-				printf("[%p] Ignoring security daemon process\n", process.handle);
-				retries_left = -1;
-				return false;
-			}
-
-			if (Settings::UnlockMethod == Settings::UnlockMethodType::FlagsFile
-				|| (Settings::UnlockMethod == Settings::UnlockMethodType::Hybrid && IsLikelyAntiCheatProtected()))
-			{
-				printf("[%p] Using FlagsFile mode\n", process.handle);
-				use_flags_file = true;
-				WriteFlagsFile(Settings::FPSCap);
-			}
-			else
-			{
-				printf("[%p] Using MemoryWrite mode\n", process.handle);
-				if (IsTargetFpsFlagActive()) WriteFlagsFile(-1);
-				Tick();
-			}
-
-			return !ts_ptr_candidates.empty() && fd_ptr != nullptr;
-		}
-	}
 
 	bool BlockingLoadModuleInfo()
 	{
@@ -338,17 +296,16 @@ struct RobloxProcess
 
 	void WriteFlagsFile(int cap)
 	{
-		// todo: read from registry like a normal person
+		// todo: add support for registry read
 
-		auto client_settings_folder = main_module.path.parent_path() / "ClientSettings";
-		auto settings_file_path = client_settings_folder / "ClientAppSettings.json";
+		auto settings_file_path = GetClientAppSettingsFilePath();
 		printf("[%p] Updating DFIntTaskSchedulerTargetFps in %ls to %d\n", process.handle, settings_file_path.c_str(), cap);
 
 		nlohmann::json object{};
 
 		// read
 		auto current_cap = FetchTargetFpsDiskValue(&object);
-		if (current_cap.has_value() && *current_cap == cap)
+		if ((current_cap.has_value() && *current_cap == cap) || (!current_cap.has_value() && cap <= 0))
 		{
 			return;
 		}
@@ -356,19 +313,41 @@ struct RobloxProcess
 		// update
 		object["DFIntTaskSchedulerTargetFps"] = cap;
 
-		// write
+		// try write
 		{
 			std::error_code ec{};
-			std::filesystem::create_directory(client_settings_folder, ec);
+			std::filesystem::create_directory(settings_file_path.parent_path(), ec);
 
 			std::ofstream file(settings_file_path);
+			if (!file.is_open())
+			{
+				NotifyError("rbxfpsunlocker Error", "Failed to write ClientAppSettings.json! If running the Windows Store version of Roblox, try running Roblox FPS Unlocker as administrator or using a different unlock method.");
+				return;
+			}
 			file << object.dump(4);
 		}
 
 		// prompt
 		char message[512]{};
-		sprintf_s(message, "Set DFIntTaskSchedulerTargetFps to %d in %ls\n\nPlease restart Roblox for changes to take effect.", cap, settings_file_path.c_str());
+		sprintf_s(message, "Set DFIntTaskSchedulerTargetFps to %d in %ls\n\nRestarting Roblox may be required for changes to take effect.", cap, settings_file_path.c_str());
 		MessageBoxA(UI::Window, message, "rbxfpsunlocker", MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
+	}
+
+	void SetFPSCapInMemory(double cap)
+	{
+		if (fd_ptr)
+		{
+			try
+			{
+				static const double min_frame_delay = 1.0 / 10000.0;
+				double frame_delay = cap <= 0.0 ? min_frame_delay : 1.0 / cap;
+
+				process.Write(fd_ptr, frame_delay);
+			} catch (ProcUtil::WindowsException &e)
+			{
+				printf("[%p] RobloxProcess::SetFPSCapInMemory failed: %s (%d)\n", process.handle, e.what(), e.GetLastError());
+			}
+		}
 	}
 
 	bool FindTaskScheduler()
@@ -406,22 +385,27 @@ struct RobloxProcess
 					// Thought process: Fancy new anti-cheat technology makes inspecting .text a bit more troublesome than before
 					// As a result, I've opted to sig GetTaskScheduler directly instead of looking for one its callers.
 					// A longer, uglier signature could be used to produce a single result here,
-					// but for the sake of (hopefully) increased reliability, we'll use a simple signature that returns about 8 candidates.
+					// but for the sake of (hopefully) increased reliability, we'll use a simple signature that returns about 8 candidates in a loaded game.
 
 					std::unordered_set<const void *> candidates{};
 					auto i = start;
 					auto stop = (std::min)(end, start + 40 * 1024 * 1024); // optim: keep search roughly within .text
+					const size_t candidate_threshold = 5;
 
 					while (i < stop)
 					{
+						// 48 8B 05 ?? ?? ?? ?? 48 83 C4 48 C3
 						auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x48\x8B\x05\x00\x00\x00\x00\x48\x83\xC4\x48\xC3", "xxx????xxxxx", i, stop); // mov rax, <Rel32>; add rsp, 48h; retn
 						if (!result) break;
 						candidates.insert(result + 7 + ProcUtil::Read<int32_t>(handle, result + 3));
-						if (candidates.size() >= 5) break; // optim: 5 is enough
+						if (candidates.size() >= candidate_threshold) break;
 						i = result + 1;
 					}
 
 					printf("[%p] GetTaskScheduler (sig byfron): found %zu candidates\n", handle, candidates.size());
+
+					if (candidates.size() != candidate_threshold)
+						return false; // keep looking
 
 					ts_ptr_candidates = std::vector<const void *>(candidates.begin(), candidates.end());
 					return true;
@@ -482,8 +466,7 @@ struct RobloxProcess
 					}
 				}
 			}
-		}
-		catch (ProcUtil::WindowsException &e)
+		} catch (ProcUtil::WindowsException &e)
 		{
 		}
 
@@ -509,6 +492,43 @@ struct RobloxProcess
 		}
 
 		return -1;
+	}
+
+public:
+	const RobloxProcessHandle &GetHandle() const
+	{
+		return process;
+	}
+
+	bool Attach(RobloxProcessHandle handle, int retry_count)
+	{
+		process = std::move(handle);
+		retries_left = retry_count;
+
+		if (!BlockingLoadModuleInfo())
+		{
+			NotifyError("rbxfpsunlocker Error", "Failed to get process base! Restart Roblox FPS Unlocker or, if you are on a 64-bit operating system, make sure you are using the 64-bit version of Roblox FPS Unlocker.");
+			retries_left = -1;
+			return false;
+		}
+		else
+		{
+			printf("[%p] Process base: %p (size %zu)\n", process.handle, main_module.base, main_module.size);
+
+			// Small windows exist where we can attach to Roblox's security daemon while it isn't being debugged (see GetRobloxProcesses)
+			// As a secondary measure, check module size (daemon is about 1MB, client is about 80MB)
+			if (main_module.size < 1024 * 1024 * 10)
+			{
+				printf("[%p] Ignoring security daemon process\n", process.handle);
+				retries_left = -1;
+				return false;
+			}
+
+			OnUnlockMethodUpdate();
+			Tick();
+
+			return !ts_ptr_candidates.empty() && fd_ptr != nullptr;
+		}
 	}
 
 	void Tick()
@@ -586,23 +606,6 @@ struct RobloxProcess
 		}
 	}
 
-	void SetFPSCapInMemory(double cap)
-	{
-		if (fd_ptr)
-		{
-			try
-			{
-				static const double min_frame_delay = 1.0 / 10000.0;
-				double frame_delay = cap <= 0.0 ? min_frame_delay : 1.0 / cap;
-
-				process.Write(fd_ptr, frame_delay);
-			} catch (ProcUtil::WindowsException &e)
-			{
-				printf("[%p] RobloxProcess::SetFPSCapInMemory failed: %s (%d)\n", process.handle, e.what(), e.GetLastError());
-			}
-		}
-	}
-
 	void SetFPSCap(double cap)
 	{
 		if (use_flags_file)
@@ -615,17 +618,25 @@ struct RobloxProcess
 		}
 	}
 
-	void OnClose()
+	void OnUIClose()
 	{
 		SetFPSCapInMemory(60.0);
 	}
 
-	void OnUIUnlockMethodChange()
+	void OnUnlockMethodUpdate()
 	{
-		if (use_flags_file && Settings::UnlockMethod == Settings::UnlockMethodType::MemoryWrite)
+		if (Settings::UnlockMethod == Settings::UnlockMethodType::FlagsFile
+			|| (Settings::UnlockMethod == Settings::UnlockMethodType::Hybrid && IsLikelyAntiCheatProtected()))
 		{
-			// to prevent requiring a double-restart
-			WriteFlagsFile(-1);
+			printf("[%p] Using FlagsFile mode\n", process.handle);
+			use_flags_file = true;
+			WriteFlagsFile(Settings::FPSCap);
+		}
+		else
+		{
+			printf("[%p] Using MemoryWrite mode\n", process.handle);
+			if (use_flags_file || IsTargetFpsFlagActive()) WriteFlagsFile(-1);
+			use_flags_file = false;
 		}
 	}
 };
@@ -640,19 +651,19 @@ void RFU_SetFPSCap(double value)
 	}
 }
 
-void RFU_OnUIClose()
-{
-	for (auto &it : AttachedProcesses)
-	{
-		it.second.OnClose();
-	}
-}
-
 void RFU_OnUIUnlockMethodChange()
 {
 	for (auto &it : AttachedProcesses)
 	{
-		it.second.OnUIUnlockMethodChange();
+		it.second.OnUnlockMethodUpdate();
+	}
+}
+
+void RFU_OnUIClose()
+{
+	for (auto &it : AttachedProcesses)
+	{
+		it.second.OnUIClose();
 	}
 }
 
@@ -690,7 +701,7 @@ DWORD WINAPI WatchThread(LPVOID)
 
 		for (auto it = AttachedProcesses.begin(); it != AttachedProcesses.end();)
 		{
-			auto &process = it->second.process;
+			auto &process = it->second.GetHandle();
 
 			DWORD code;
 			BOOL result = GetExitCodeProcess(process.handle, &code);

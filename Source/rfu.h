@@ -5,5 +5,5 @@
 
 bool CheckForUpdates();
 void RFU_SetFPSCap(double value);
-void RFU_OnUIClose();
 void RFU_OnUIUnlockMethodChange();
+void RFU_OnUIClose();

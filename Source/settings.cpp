@@ -82,7 +82,7 @@ namespace Settings
 	bool NonBlockingErrors = true;
 	bool SilentErrors = false;
 	bool QuickStart = false;
-	UnlockMethodType UnlockMethod = UnlockMethodType::MemoryWrite;
+	UnlockMethodType UnlockMethod = UnlockMethodType::Hybrid;
 
 	bool Init()
 	{

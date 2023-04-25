@@ -43,8 +43,8 @@ namespace ProcUtil
 	std::vector<HANDLE> GetProcessesByImageName(const char *image_name, DWORD access, size_t limit = -1);
 	HANDLE GetProcessByImageName(const char* image_name);
 
-	std::vector<HMODULE> GetProcessModules(HANDLE process);
-	ModuleInfo GetModuleInfo(HANDLE process, HMODULE module);
+	std::vector<ModuleInfo> GetProcessModules(HANDLE process);
+	ModuleInfo GetMainModuleInfo(HANDLE process);
 	bool FindModuleInfo(HANDLE process, const std::filesystem::path& name, ModuleInfo& out);
 	void *ScanProcess(HANDLE process, const char *aob, const char *mask, const uint8_t *start = nullptr, const uint8_t *end = (const uint8_t *)UINTPTR_MAX);
 	
@@ -85,7 +85,6 @@ namespace ProcUtil
 		std::filesystem::path path;
 		void *base = nullptr;
 		size_t size = 0;
-		void *entry_point = nullptr;
 
 		HMODULE GetHandle() const
 		{
@@ -138,7 +137,7 @@ namespace ProcUtil
 			: handle(handle), window(NULL)
 		{
 			id = GetProcessId(handle);
-			module = GetModuleInfo(handle, NULL);
+			module = GetMainModuleInfo(handle);
 			name = module.path.filename().string();
 
 			if (find_window)
