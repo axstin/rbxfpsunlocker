@@ -40,7 +40,7 @@ namespace ProcUtil
 	struct ModuleInfo;
 	struct ProcessInfo;
 
-	std::vector<HANDLE> GetProcessesByImageName(const char *image_name, size_t limit = -1, DWORD access = PROCESS_ALL_ACCESS);
+	std::vector<HANDLE> GetProcessesByImageName(const char *image_name, DWORD access, size_t limit = -1);
 	HANDLE GetProcessByImageName(const char* image_name);
 
 	std::vector<HMODULE> GetProcessModules(HANDLE process);
@@ -78,26 +78,6 @@ namespace ProcUtil
 	inline void Write(HANDLE process, const void *location, const T& value)
 	{
 		if (!WriteProcessMemory(process, (LPVOID) location, (LPCVOID) &value, sizeof(T), NULL)) throw WindowsException("unable to write process memory");
-	}
-
-	template <size_t N, typename T>
-	bool ExecuteStub(HANDLE process, const uint8_t (&code)[N], T& arg)
-	{
-		if (auto alloc = (const uint8_t *)VirtualAllocEx(process, NULL, sizeof(T) + sizeof(code), MEM_COMMIT, PAGE_EXECUTE_READWRITE))
-		{
-			Write(process, alloc, arg);
-			Write(process, alloc + sizeof(T), code);
-
-			if (HANDLE thread = CreateRemoteThread(process, NULL, 0, (LPTHREAD_START_ROUTINE)(alloc + sizeof(T)), (LPVOID) alloc, NULL, NULL))
-			{
-				WaitForSingleObject(thread, INFINITE);
-				arg = Read<T>(process, alloc);
-				VirtualFreeEx(process, (LPVOID) alloc, 0, MEM_RELEASE);
-				return true;
-			}
-		}
-		
-		return false;
 	}
 
 	struct ModuleInfo

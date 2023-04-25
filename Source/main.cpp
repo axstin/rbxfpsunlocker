@@ -3,6 +3,7 @@
 #include <vector>
 #include <codecvt>
 #include <unordered_map>
+#include <unordered_set>
 #include <chrono>
 #include <TlHelp32.h>
 
@@ -15,27 +16,120 @@
 #include "procutil.h"
 #include "sigscan.h"
 
+#define ROBLOX_BASIC_ACCESS (PROCESS_QUERY_INFORMATION | PROCESS_VM_READ)
+#define	ROBLOX_WRITE_ACCESS (PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE)
+
 HANDLE SingletonMutex;
 
-std::vector<HANDLE> GetRobloxProcesses(bool include_client = true, bool include_studio = true)
+enum class RobloxHandleType
 {
-	std::vector<HANDLE> result;
+	None,
+	Client,
+	UWP,
+	Studio
+};
+
+struct RobloxProcessHandle
+{
+	HANDLE handle;
+	RobloxHandleType type;
+	bool can_write;
+
+	RobloxProcessHandle(HANDLE handle = NULL, RobloxHandleType type = RobloxHandleType::None, bool can_write = false) : handle(handle), type(type), can_write(can_write) {};
+	RobloxProcessHandle(const RobloxProcessHandle &) = delete;
+	RobloxProcessHandle &operator=(const RobloxProcessHandle &) = delete;
+
+	RobloxProcessHandle(RobloxProcessHandle &&other)
+	{
+		std::swap(handle, other.handle);
+		std::swap(type, other.type);
+		std::swap(can_write, other.can_write);
+	}
+
+	RobloxProcessHandle &operator=(RobloxProcessHandle &&other)
+	{
+		if (this != &other)
+		{
+			if (handle) CloseHandle(handle);
+			handle = std::exchange(other.handle, {});
+			type = std::exchange(other.type, {});
+			can_write = std::exchange(other.can_write, {});
+		}
+		return *this;
+	}
+
+	~RobloxProcessHandle()
+	{
+		if (handle)
+		{
+			printf("[%p] Closing handle with type=%u, can_write=%u\n", handle, type, can_write);
+			CloseHandle(handle);
+		}
+	}
+
+	HANDLE CreateWriteHandle()
+	{
+		HANDLE new_handle = NULL;
+		DuplicateHandle(GetCurrentProcess(), handle, GetCurrentProcess(), &new_handle, ROBLOX_WRITE_ACCESS, FALSE, NULL);
+		return new_handle;
+	}
+
+	bool UpgradeHandle() noexcept
+	{
+		if (can_write) return true;
+		HANDLE new_handle = CreateWriteHandle();
+		if (!new_handle) return false;
+		CloseHandle(handle);
+		handle = new_handle;
+		can_write = true;
+		return true;
+	}
+
+	template <typename T>
+	void Write(const void *location, const T &value)
+	{
+		if (can_write)
+		{
+			printf("[%p] Writing to %p\n", handle, location);
+			ProcUtil::Write<T>(handle, location, value);
+		}
+		else
+		{
+			auto write_handle = CreateWriteHandle();
+			if (!write_handle) throw ProcUtil::WindowsException("failed to create write handle");
+			printf("[%p] Writing to %p with handle %p\n", handle, location, write_handle);
+			ProcUtil::Write<T>(write_handle, location, value);
+			CloseHandle(write_handle);
+		}
+	}
+};
+
+std::vector<RobloxProcessHandle> GetRobloxProcesses(bool include_client = true, bool include_studio = true)
+{
+	std::vector<RobloxProcessHandle> result;
 	if (include_client)
 	{
-		for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxPlayerBeta.exe"))
+		for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxPlayerBeta.exe", ROBLOX_BASIC_ACCESS))
 		{
 			// Roblox has a security daemon process that runs under the same name as the client (as of 3/2/22 update). Don't unlock it.
 			BOOL debugged = FALSE;
 			CheckRemoteDebuggerPresent(handle, &debugged);
-			if (!debugged) result.emplace_back(handle);
+			if (!debugged)
+			{
+				result.emplace_back(handle, RobloxHandleType::Client, false);
+			}
+			else
+			{
+				CloseHandle(handle);
+			}
 		}
-		for (HANDLE handle : ProcUtil::GetProcessesByImageName("Windows10Universal.exe")) result.emplace_back(handle);
+		for (HANDLE handle : ProcUtil::GetProcessesByImageName("Windows10Universal.exe", ROBLOX_BASIC_ACCESS)) result.emplace_back(handle, RobloxHandleType::UWP, false);
 	}
-	if (include_studio) for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxStudioBeta.exe")) result.emplace_back(handle);
+	if (include_studio) for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxStudioBeta.exe", ROBLOX_WRITE_ACCESS)) result.emplace_back(handle, RobloxHandleType::Studio, true);
 	return result;
 }
 
-HANDLE GetRobloxProcess()
+RobloxProcessHandle GetRobloxProcess()
 {
 	auto processes = GetRobloxProcesses();
 
@@ -43,19 +137,19 @@ HANDLE GetRobloxProcess()
 		return NULL;
 
 	if (processes.size() == 1)
-		return processes[0];
+		return std::move(processes[0]);
 
 	printf("Multiple processes found! Select a process to inject into (%u - %zu):\n", 1, processes.size());
 	for (int i = 0; i < processes.size(); i++)
 	{
 		try
 		{
-			ProcUtil::ProcessInfo info(processes[i], true);
+			ProcUtil::ProcessInfo info(processes[i].handle, true);
 			printf("[%d] [%s] %s\n", i + 1, info.name.c_str(), info.window_title.c_str());
 		}
 		catch (ProcUtil::WindowsException& e)
 		{
-			printf("[%d] Invalid process %p (%s, %X)\n", i + 1, processes[i], e.what(), e.GetLastError());
+			printf("[%d] Invalid process %p (%s, %X)\n", i + 1, processes[i].handle, e.what(), e.GetLastError());
 		}
 	}
 
@@ -83,7 +177,7 @@ HANDLE GetRobloxProcess()
 		break;
 	}
 
-	return processes[selection - 1];
+	return std::move(processes[selection - 1]);
 }
 
 void NotifyError(const char* title, const char* error)
@@ -115,16 +209,17 @@ void NotifyError(const char* title, const char* error)
 
 struct RobloxProcess
 {
-	HANDLE handle = NULL;
+	RobloxProcessHandle process{};
 	ProcUtil::ModuleInfo main_module{};
-	const void *ts_ptr = nullptr; // task scheduler pointer
+	std::vector<const void *> ts_ptr_candidates; // task scheduler pointer candidates
 	const void *fd_ptr = nullptr; // frame delay pointer
+	bool safe_mode = false;
 
 	int retries_left = 0;
 
-	bool Attach(HANDLE process, int retry_count)
+	bool Attach(RobloxProcessHandle handle, int retry_count)
 	{
-		handle = process;
+		process = std::move(handle);
 		retries_left = retry_count;
 
 		if (!BlockingLoadModuleInfo())
@@ -135,20 +230,20 @@ struct RobloxProcess
 		}
 		else
 		{
-			printf("[%p] Process base: %p (size %zu)\n", handle, main_module.base, main_module.size);
+			printf("[%p] Process base: %p (size %zu)\n", process.handle, main_module.base, main_module.size);
 
 			// Small windows exist where we can attach to Roblox's security daemon while it isn't being debugged (see GetRobloxProcesses)
 			// As a secondary measure, check module size (daemon is about 1MB, client is about 80MB)
 			if (main_module.size < 1024 * 1024 * 10)
 			{
-				printf("[%p] Ignoring security daemon process\n", handle);
+				printf("[%p] Ignoring security daemon process\n", process.handle);
 				retries_left = -1;
 				return false;
 			}
 
 			Tick();
 
-			return ts_ptr != nullptr && fd_ptr != nullptr;
+			return !ts_ptr_candidates.empty() && fd_ptr != nullptr;
 		}
 	}
 
@@ -157,11 +252,11 @@ struct RobloxProcess
 		int tries = 5;
 		int wait_time = 100;
 
-		printf("[%p] Finding process base...\n", handle);
+		printf("[%p] Finding process base...\n", process.handle);
 
 		while (true)
 		{
-			ProcUtil::ProcessInfo info = ProcUtil::ProcessInfo(handle);
+			ProcUtil::ProcessInfo info = ProcUtil::ProcessInfo(process.handle);
 
 			if (info.module.base != nullptr)
 			{
@@ -171,7 +266,7 @@ struct RobloxProcess
 
 			if (tries--)
 			{
-				printf("[%p] Retrying in %dms...\n", handle, wait_time);
+				printf("[%p] Retrying in %dms...\n", process.handle, wait_time);
 				Sleep(wait_time);
 				wait_time *= 2;
 			} else
@@ -181,10 +276,11 @@ struct RobloxProcess
 		}
 	}
 
-	const void *FindTaskScheduler() const
+	bool FindTaskScheduler()
 	{
 		try
 		{
+			const auto handle = process.handle;
 			const auto start = (const uint8_t *)main_module.base;
 			const auto end = start + main_module.size;
 
@@ -203,9 +299,37 @@ struct RobloxProcess
 						if (auto inst = sigscan::scan("\x48\x8B\x05\x00\x00\x00\x00\x48\x83\xC4\x28", "xxx????xxxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
 						{
 							const uint8_t *remote = gts_fn + (inst - buffer);
-							return remote + 7 + *(int32_t *)(inst + 3);
+							ts_ptr_candidates = { remote + 7 + *(int32_t *)(inst + 3) };
+							return true;
 						}
 					}
+				}
+				else
+				{
+					// Assume Byfron
+					// 
+					// Thought process: Fancy new anti-cheat technology makes inspecting .text a bit more troublesome than before
+					// As a result, I've opted to sig GetTaskScheduler directly instead of looking for one its callers.
+					// A longer, uglier signature could be used to produce a single result here,
+					// but for the sake of (hopefully) increased reliability, we'll use a simple signature that returns about 8 candidates.
+
+					std::unordered_set<const void *> candidates{};
+					auto i = start;
+					auto stop = (std::min)(end, start + 40 * 1024 * 1024); // optim: keep search roughly within .text
+
+					while (i < stop)
+					{
+						auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x48\x8B\x05\x00\x00\x00\x00\x48\x83\xC4\x48\xC3", "xxx????xxxxx", i, stop); // mov rax, <Rel32>; add rsp, 48h; retn
+						if (!result) break;
+						candidates.insert(result + 7 + ProcUtil::Read<int32_t>(handle, result + 3));
+						if (candidates.size() >= 5) break; // optim: 5 is enough
+						i = result + 1;
+					}
+
+					printf("[%p] GetTaskScheduler (sig byfron): found %zu candidates\n", handle, candidates.size());
+
+					ts_ptr_candidates = std::vector<const void *>(candidates.begin(), candidates.end());
+					return true;
 				}
 			} else
 			{
@@ -222,7 +346,8 @@ struct RobloxProcess
 						if (auto inst = sigscan::scan("\xA1\x00\x00\x00\x00\x8B\x4D\xF4", "x????xxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
 						{
 							//printf("[%p] Inst: %p\n", process, gts_fn + (inst - buffer));
-							return (const void *)(*(uint32_t *)(inst + 1));
+							ts_ptr_candidates = { (const void *)(*(uint32_t *)(inst + 1)) };
+							return true;
 						}
 					}
 				}
@@ -239,7 +364,8 @@ struct RobloxProcess
 						if (auto inst = sigscan::scan("\xA1\x00\x00\x00\x00\x8B\x4D\xF4", "x????xxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
 						{
 							//printf("[%p] Inst: %p\n", process, gts_fn + (inst - buffer));
-							return (const void *)(*(uint32_t *)(inst + 1));
+							ts_ptr_candidates = { (const void *)(*(uint32_t *)(inst + 1)) };
+							return true;
 						}
 					}
 				}
@@ -255,7 +381,8 @@ struct RobloxProcess
 					{
 						if (auto inst = sigscan::scan("\xA1\x00\x00\x00\x00\x8B\x4D\xF4", "x????xxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
 						{
-							return (const void *)(*(uint32_t *)(inst + 1));
+							ts_ptr_candidates = { (const void *)(*(uint32_t *)(inst + 1)) };
+							return true;
 						}
 					}
 				}
@@ -265,7 +392,7 @@ struct RobloxProcess
 		{
 		}
 
-		return nullptr;
+		return false;
 	}
 
 	size_t FindTaskSchedulerFrameDelayOffset(const void *scheduler) const
@@ -273,7 +400,7 @@ struct RobloxProcess
 		const size_t search_offset = 0x100; // ProcUtil::IsProcess64Bit(process) ? 0x200 : 0x100;
 
 		uint8_t buffer[0x100];
-		if (!ProcUtil::Read(handle, (const uint8_t *)scheduler + search_offset, buffer, sizeof(buffer)))
+		if (!ProcUtil::Read(process.handle, (const uint8_t *)scheduler + search_offset, buffer, sizeof(buffer)))
 			return -1;
 
 		/* Find the frame delay variable inside TaskScheduler (ugly, but it should survive updates unless the variable is removed or shifted)
@@ -294,12 +421,12 @@ struct RobloxProcess
 		if (retries_left < 0)
 			return; // we tried
 
-		if (!ts_ptr)
+		if (ts_ptr_candidates.empty())
 		{
 			const auto start_time = std::chrono::steady_clock::now();
-			ts_ptr = FindTaskScheduler();
-
-			if (!ts_ptr)
+			FindTaskScheduler();
+			
+			if (ts_ptr_candidates.empty())
 			{
 				if (retries_left-- <= 0)
 					NotifyError("rbxfpsunlocker Error", "Unable to find TaskScheduler! This is probably due to a Roblox update-- watch the github for any patches or a fix.");
@@ -308,40 +435,53 @@ struct RobloxProcess
 			else
 			{
 				const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
-				printf("[%p] Found TaskScheduler address in %lldms\n", handle, elapsed);
+				printf("[%p] Found TaskScheduler candidates in %lldms\n", process.handle, elapsed);
 			}
 		}
 
-		if (ts_ptr && !fd_ptr)
+		if (!ts_ptr_candidates.empty() && !fd_ptr)
 		{
 			try
 			{
-				if (auto scheduler = (const uint8_t *)(ProcUtil::ReadPointer(handle, ts_ptr)))
-				{
-					printf("[%p] Scheduler: %p\n", handle, scheduler);
+				size_t fail_count = 0;
 
-					size_t delay_offset = FindTaskSchedulerFrameDelayOffset(scheduler);
-					if (delay_offset == -1)
+				for (const void *ts_ptr : ts_ptr_candidates)
+				{
+					if (auto scheduler = (const uint8_t *)(ProcUtil::ReadPointer(process.handle, ts_ptr)))
 					{
-						if (retries_left-- <= 0)
-							NotifyError("rbxfpsunlocker Error", "Variable scan failed! Make sure your framerate is at ~60.0 FPS (press Shift+F5 in-game) before using Roblox FPS Unlocker.");
+						printf("[%p] Potential task scheduler: %p\n", process.handle, scheduler);
+
+						size_t delay_offset = FindTaskSchedulerFrameDelayOffset(scheduler);
+						if (delay_offset == -1)
+						{
+							fail_count++;
+							continue; // try next
+						}
+
+						// winner
+						printf("[%p] Frame delay offset: %zu (0x%zx)\n", process.handle, delay_offset, delay_offset);
+						fd_ptr = scheduler + delay_offset;
+
+						// first write
+						SetFPSCap(Settings::FPSCap);
 						return;
 					}
-
-					printf("[%p] Frame delay offset: %zu (0x%zx)\n", handle, delay_offset, delay_offset);
-
-					fd_ptr = scheduler + delay_offset;
-
-					SetFPSCap(Settings::FPSCap);
+					else
+					{
+						printf("[%p] *ts_ptr (%p) == nullptr\n", process.handle, ts_ptr);
+					}
 				}
-				else
+
+				if (fail_count > 0)
 				{
-					printf("[%p] *ts_ptr == nullptr\n", handle);
+					// one or more candidates had valid pointers with no frame delay variable
+					if (retries_left-- <= 0)
+						NotifyError("rbxfpsunlocker Error", "Variable scan failed! Make sure your framerate is at ~60.0 FPS (press Shift+F5 in-game) before using Roblox FPS Unlocker.");
 				}
 			}
 			catch (ProcUtil::WindowsException& e)
 			{
-				printf("[%p] RobloxProcess::Tick failed: %s (%d)\n", handle, e.what(), e.GetLastError());
+				printf("[%p] RobloxProcess::Tick failed: %s (%d)\n", process.handle, e.what(), e.GetLastError());
 				if (retries_left-- <= 0)
 					NotifyError("rbxfpsunlocker Error", "An exception occurred while performing the variable scan.");
 			}
@@ -357,11 +497,11 @@ struct RobloxProcess
 				static const double min_frame_delay = 1.0 / 10000.0;
 				double frame_delay = cap <= 0.0 ? min_frame_delay : 1.0 / cap;
 
-				ProcUtil::Write(handle, fd_ptr, frame_delay);
+				process.Write(fd_ptr, frame_delay);
 			}
 			catch (ProcUtil::WindowsException &e)
 			{
-				printf("[%p] RobloxProcess::SetFPSCap failed: %s (%d)\n", handle, e.what(), e.GetLastError());
+				printf("[%p] RobloxProcess::SetFPSCap failed: %s (%d)\n", process.handle, e.what(), e.GetLastError());
 			}
 		}
 	}
@@ -389,41 +529,37 @@ DWORD WINAPI WatchThread(LPVOID)
 
 	while (1)
 	{
-		auto processes = GetRobloxProcesses(Settings::UnlockClient, Settings::UnlockStudio);
-
-		for (auto& process : processes)
 		{
-			DWORD id = GetProcessId(process);
+			auto processes = GetRobloxProcesses(Settings::UnlockClient, Settings::UnlockStudio);
 
-			if (AttachedProcesses.find(id) == AttachedProcesses.end())
+			for (auto &process : processes)
 			{
-				printf("Injecting into new process %p (pid %d)\n", process, id);
-				RobloxProcess roblox_process;
+				DWORD id = GetProcessId(process.handle);
 
-				roblox_process.Attach(process, 3);
+				if (AttachedProcesses.find(id) == AttachedProcesses.end())
+				{
+					printf("Injecting into new process %p (pid %d)\n", process.handle, id);
 
-				AttachedProcesses[id] = roblox_process;
+					RobloxProcess roblox_process;
+					roblox_process.Attach(std::move(process), 5);
+					AttachedProcesses[id] = std::move(roblox_process);
 
-				printf("New size: %zu\n", AttachedProcesses.size());
-			}
-			else
-			{
-				CloseHandle(process);
+					printf("New size: %zu\n", AttachedProcesses.size());
+				}
 			}
 		}
 
 		for (auto it = AttachedProcesses.begin(); it != AttachedProcesses.end();)
 		{
-			HANDLE process = it->second.handle;
+			auto &process = it->second.process;
 
 			DWORD code;
-			BOOL result = GetExitCodeProcess(process, &code);
+			BOOL result = GetExitCodeProcess(process.handle, &code);
 
 			if (code != STILL_ACTIVE)
 			{
-				printf("Purging dead process %p (pid %d, code %X)\n", process, GetProcessId(process), code);
+				printf("Purging dead process %p (pid %d, code %X)\n", process.handle, GetProcessId(process.handle), code);
 				it = AttachedProcesses.erase(it);
-				CloseHandle(process);
 				printf("New size: %zu\n", AttachedProcesses.size());
 			}
 			else
@@ -472,26 +608,25 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 		printf("Waiting for Roblox...\n");
 
-		HANDLE process;
+		RobloxProcessHandle process;
+		RobloxProcess attacher{};
 
 		do
 		{
 			Sleep(100);
 			process = GetRobloxProcess();
 		}
-		while (!process);
+		while (!process.handle);
 
 		printf("Found Roblox...\n");
 		printf("Attaching...\n");
 
-		if (!RobloxProcess().Attach(process, 0))
+		if (!attacher.Attach(std::move(process), 0))
 		{
 			printf("\nERROR: unable to attach to process\n");
 			pause();
 			return 0;
 		}
-
-		CloseHandle(process);
 
 		printf("\nSuccess! The injector will close in 3 seconds...\n");
 

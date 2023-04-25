@@ -7,7 +7,7 @@
 
 #define READ_LIMIT (1024 * 1024 * 2) // 2 MB
 
-std::vector<HANDLE> ProcUtil::GetProcessesByImageName(const char *image_name, size_t limit, DWORD access)
+std::vector<HANDLE> ProcUtil::GetProcessesByImageName(const char *image_name, DWORD access, size_t limit)
 {
 	std::vector<HANDLE> result;
 
