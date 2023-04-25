@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <chrono>
+#include <fstream>
 #include <TlHelp32.h>
 
 #pragma comment(lib, "Shlwapi.lib")
@@ -15,6 +16,7 @@
 #include "rfu.h"
 #include "procutil.h"
 #include "sigscan.h"
+#include "nlohmann.hpp"
 
 #define ROBLOX_BASIC_ACCESS (PROCESS_QUERY_INFORMATION | PROCESS_VM_READ)
 #define	ROBLOX_WRITE_ACCESS (PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE)
@@ -62,7 +64,7 @@ struct RobloxProcessHandle
 	{
 		if (handle)
 		{
-			printf("[%p] Closing handle with type=%u, can_write=%u\n", handle, type, can_write);
+			//printf("[%p] Closing handle with type=%u, can_write=%u\n", handle, type, can_write);
 			CloseHandle(handle);
 		}
 	}
@@ -213,7 +215,7 @@ struct RobloxProcess
 	ProcUtil::ModuleInfo main_module{};
 	std::vector<const void *> ts_ptr_candidates; // task scheduler pointer candidates
 	const void *fd_ptr = nullptr; // frame delay pointer
-	bool safe_mode = false;
+	bool use_flags_file = false;
 
 	int retries_left = 0;
 
@@ -241,7 +243,19 @@ struct RobloxProcess
 				return false;
 			}
 
-			Tick();
+			if (Settings::UnlockMethod == Settings::UnlockMethodType::FlagsFile
+				|| (Settings::UnlockMethod == Settings::UnlockMethodType::Hybrid && IsLikelyAntiCheatProtected()))
+			{
+				printf("[%p] Using FlagsFile mode\n", process.handle);
+				use_flags_file = true;
+				WriteFlagsFile(Settings::FPSCap);
+			}
+			else
+			{
+				printf("[%p] Using MemoryWrite mode\n", process.handle);
+				if (IsTargetFpsFlagActive()) WriteFlagsFile(-1);
+				Tick();
+			}
 
 			return !ts_ptr_candidates.empty() && fd_ptr != nullptr;
 		}
@@ -274,6 +288,87 @@ struct RobloxProcess
 				return false;
 			}
 		}
+	}
+
+	bool IsLikelyAntiCheatProtected() const
+	{
+		return process.type != RobloxHandleType::Studio && ProcUtil::IsProcess64Bit(process.handle);
+	}
+
+	std::filesystem::path GetClientAppSettingsFilePath() const
+	{
+		return main_module.path.parent_path() / "ClientSettings" / "ClientAppSettings.json";
+	}
+
+	std::optional<int> FetchTargetFpsDiskValue(nlohmann::json *object_out = nullptr) const
+	{
+		std::ifstream file(GetClientAppSettingsFilePath());
+
+		if (file.is_open())
+		{
+			nlohmann::json object = nlohmann::json::parse(file, nullptr, false);
+			if (!object.is_discarded())
+			{
+				std::optional<int> result{};
+
+				if (object.contains("DFIntTaskSchedulerTargetFps"))
+				{
+					auto target_fps = object["DFIntTaskSchedulerTargetFps"];
+					if (target_fps.is_number_integer())
+					{
+						result = target_fps.get<int>();
+					}
+				}
+
+				if (object_out)
+					*object_out = std::move(object);
+
+				return result;
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	bool IsTargetFpsFlagActive() const
+	{
+		auto value = FetchTargetFpsDiskValue();
+		return value.has_value() && *value > 0;
+	}
+
+	void WriteFlagsFile(int cap)
+	{
+		// todo: read from registry like a normal person
+
+		auto client_settings_folder = main_module.path.parent_path() / "ClientSettings";
+		auto settings_file_path = client_settings_folder / "ClientAppSettings.json";
+		printf("[%p] Updating DFIntTaskSchedulerTargetFps in %ls to %d\n", process.handle, settings_file_path.c_str(), cap);
+
+		nlohmann::json object{};
+
+		// read
+		auto current_cap = FetchTargetFpsDiskValue(&object);
+		if (current_cap.has_value() && *current_cap == cap)
+		{
+			return;
+		}
+
+		// update
+		object["DFIntTaskSchedulerTargetFps"] = cap;
+
+		// write
+		{
+			std::error_code ec{};
+			std::filesystem::create_directory(client_settings_folder, ec);
+
+			std::ofstream file(settings_file_path);
+			file << object.dump(4);
+		}
+
+		// prompt
+		char message[512]{};
+		sprintf_s(message, "Set DFIntTaskSchedulerTargetFps to %d in %ls\n\nPlease restart Roblox for changes to take effect.", cap, settings_file_path.c_str());
+		MessageBoxA(UI::Window, message, "rbxfpsunlocker", MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
 	}
 
 	bool FindTaskScheduler()
@@ -418,6 +513,9 @@ struct RobloxProcess
 
 	void Tick()
 	{
+		if (use_flags_file)
+			return;
+
 		if (retries_left < 0)
 			return; // we tried
 
@@ -488,7 +586,7 @@ struct RobloxProcess
 		}
 	}
 
-	void SetFPSCap(double cap)
+	void SetFPSCapInMemory(double cap)
 	{
 		if (fd_ptr)
 		{
@@ -498,22 +596,63 @@ struct RobloxProcess
 				double frame_delay = cap <= 0.0 ? min_frame_delay : 1.0 / cap;
 
 				process.Write(fd_ptr, frame_delay);
-			}
-			catch (ProcUtil::WindowsException &e)
+			} catch (ProcUtil::WindowsException &e)
 			{
-				printf("[%p] RobloxProcess::SetFPSCap failed: %s (%d)\n", process.handle, e.what(), e.GetLastError());
+				printf("[%p] RobloxProcess::SetFPSCapInMemory failed: %s (%d)\n", process.handle, e.what(), e.GetLastError());
 			}
+		}
+	}
+
+	void SetFPSCap(double cap)
+	{
+		if (use_flags_file)
+		{
+			WriteFlagsFile(cap);
+		}
+		else
+		{
+			SetFPSCapInMemory(cap);
+		}
+	}
+
+	void OnClose()
+	{
+		SetFPSCapInMemory(60.0);
+	}
+
+	void OnUIUnlockMethodChange()
+	{
+		if (use_flags_file && Settings::UnlockMethod == Settings::UnlockMethodType::MemoryWrite)
+		{
+			// to prevent requiring a double-restart
+			WriteFlagsFile(-1);
 		}
 	}
 };
 
 std::unordered_map<DWORD, RobloxProcess> AttachedProcesses;
 
-void SetFPSCapExternal(double value)
+void RFU_SetFPSCap(double value)
 {
 	for (auto& it : AttachedProcesses)
 	{
 		it.second.SetFPSCap(value);
+	}
+}
+
+void RFU_OnUIClose()
+{
+	for (auto &it : AttachedProcesses)
+	{
+		it.second.OnClose();
+	}
+}
+
+void RFU_OnUIUnlockMethodChange()
+{
+	for (auto &it : AttachedProcesses)
+	{
+		it.second.OnUIUnlockMethodChange();
 	}
 }
 

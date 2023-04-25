@@ -159,6 +159,7 @@
     <ClCompile Include="version.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="nlohmann.hpp" />
     <ClInclude Include="procutil.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="settings.h" />

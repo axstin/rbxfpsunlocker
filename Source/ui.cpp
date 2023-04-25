@@ -8,22 +8,28 @@
 #include "settings.h"
 #include "rfu.h"
 
-#define RFU_TRAYICON			WM_APP + 1
-#define RFU_TRAYMENU_APC		WM_APP + 2
-#define RFU_TRAYMENU_CONSOLE	WM_APP + 3
-#define RFU_TRAYMENU_EXIT		WM_APP + 4
-#define RFU_TRAYMENU_VSYNC		WM_APP + 5
-#define RFU_TRAYMENU_LOADSET	WM_APP + 6
-#define RFU_TRAYMENU_GITHUB		WM_APP + 7
-#define RFU_TRAYMENU_STUDIO		WM_APP + 8
-#define RFU_TRAYMENU_CFU		WM_APP + 9
-#define RFU_TRAYMENU_ADV_NBE	WM_APP + 10
-#define RFU_TRAYMENU_ADV_SE		WM_APP + 11
-#define RFU_TRAYMENU_ADV_QS		WM_APP + 12
-#define RFU_TRAYMENU_CLIENT		WM_APP + 13
+#define RFU_TRAYICON				(WM_APP + 1)
+#define RFU_TRAYMENU_APC			(WM_APP + 2)
+#define RFU_TRAYMENU_CONSOLE		(WM_APP + 3)
+#define RFU_TRAYMENU_EXIT			(WM_APP + 4)
+#define RFU_TRAYMENU_VSYNC			(WM_APP + 5)
+#define RFU_TRAYMENU_LOADSET		(WM_APP + 6)
+#define RFU_TRAYMENU_GITHUB			(WM_APP + 7)
+#define RFU_TRAYMENU_STUDIO			(WM_APP + 8)
+#define RFU_TRAYMENU_CFU			(WM_APP + 9)
+#define RFU_TRAYMENU_ADV_NBE		(WM_APP + 10)
+#define RFU_TRAYMENU_ADV_SE			(WM_APP + 11)
+#define RFU_TRAYMENU_ADV_QS			(WM_APP + 12)
+#define RFU_TRAYMENU_CLIENT			(WM_APP + 13)
 
-#define RFU_FCS_FIRST			(WM_APP + 20)
-#define RFU_FCS_NONE			RFU_FCS_FIRST
+#define RFU_TRAYMENU_UM				(WM_APP + 14)
+#define RFU_TRAYMENU_UM_HYBRID		(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::Hybrid))
+#define RFU_TRAYMENU_UM_MEMWRITE	(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::MemoryWrite))
+#define RFU_TRAYMENU_UM_FLAGSFILE	(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::FlagsFile))
+#define RFU_TRAYMENU_UM_LAST		(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::Count) - 1)
+
+#define RFU_FCS_FIRST				(WM_APP + 20)
+#define RFU_FCS_NONE				RFU_FCS_FIRST
 
 HWND UI::Window = NULL;
 int UI::AttachedProcessesCount = 0;
@@ -72,6 +78,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			CheckMenuRadioItem(submenu, RFU_FCS_FIRST, RFU_FCS_FIRST + Settings::FPSCapValues.size(), RFU_FCS_FIRST + Settings::FPSCapSelection, MF_BYCOMMAND);
 			AppendMenu(popup, MF_POPUP, (UINT_PTR)submenu, "FPS Cap");
 
+			HMENU unlock_method = CreatePopupMenu();
+			AppendMenu(unlock_method, MF_STRING, RFU_TRAYMENU_UM_HYBRID, "Hybrid");
+			AppendMenu(unlock_method, MF_STRING, RFU_TRAYMENU_UM_MEMWRITE, "Memory Write");
+			AppendMenu(unlock_method, MF_STRING, RFU_TRAYMENU_UM_FLAGSFILE, "Flags File");
+			CheckMenuRadioItem(unlock_method, RFU_TRAYMENU_UM, RFU_TRAYMENU_UM_LAST, RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethod), MF_BYCOMMAND);
+			AppendMenu(popup, MF_POPUP, (UINT_PTR)unlock_method, "Unlock Method");
+
 			HMENU advanced = CreatePopupMenu();
 			AppendMenu(advanced, MF_STRING | (Settings::SilentErrors ? MF_CHECKED : 0), RFU_TRAYMENU_ADV_SE, "Silent Errors");
 			AppendMenu(advanced, MF_STRING | (Settings::SilentErrors ? MF_GRAYED : 0) | (Settings::NonBlockingErrors ? MF_CHECKED : 0), RFU_TRAYMENU_ADV_NBE, "Use Console Errors");
@@ -92,7 +105,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				switch (result)
 				{
 				case RFU_TRAYMENU_EXIT:
-					SetFPSCapExternal(60);
+					RFU_OnUIClose();
 					Shell_NotifyIcon(NIM_DELETE, &NotifyIconData);
 					TerminateThread(WatchThread, 0);
 					FreeConsole();
@@ -149,6 +162,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					{
 						Settings::FPSCapSelection = result - RFU_FCS_FIRST;
 						Settings::FPSCap = Settings::FPSCapSelection == 0 ? 0.0 : Settings::FPSCapValues[Settings::FPSCapSelection - 1];
+					}
+					else if (result >= RFU_TRAYMENU_UM
+						&& result <= RFU_TRAYMENU_UM_LAST)
+					{
+						const auto before = Settings::UnlockMethod;
+						Settings::UnlockMethod = static_cast<Settings::UnlockMethodType>(result - RFU_TRAYMENU_UM);
+						if (Settings::UnlockMethod != before)
+						{
+							RFU_OnUIUnlockMethodChange();
+						}					
 					}
 				}
 

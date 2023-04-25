@@ -4,6 +4,15 @@
 
 namespace Settings
 {
+	enum class UnlockMethodType
+	{
+		Hybrid,
+		MemoryWrite,
+		FlagsFile,
+
+		Count
+	};
+
 	extern bool VSyncEnabled;
 	extern std::vector<double> FPSCapValues;
 	extern uint32_t FPSCapSelection;
@@ -14,6 +23,7 @@ namespace Settings
 	extern bool NonBlockingErrors;
 	extern bool SilentErrors;
 	extern bool QuickStart;
+	extern UnlockMethodType UnlockMethod;
 
 	bool Init();
 	bool Load();

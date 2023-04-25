@@ -7,6 +7,8 @@
 #include <functional>
 #include <cerrno>
 
+// todo: jesus this is ugly rewrite all this if i ever care enough
+
 const char *advance(const char *ptr)
 {
 	while (isspace(*ptr)) ptr++;
@@ -80,6 +82,7 @@ namespace Settings
 	bool NonBlockingErrors = true;
 	bool SilentErrors = false;
 	bool QuickStart = false;
+	UnlockMethodType UnlockMethod = UnlockMethodType::MemoryWrite;
 
 	bool Init()
 	{
@@ -129,6 +132,12 @@ namespace Settings
 						SilentErrors = ParseBool(value);
 					else if (key == "QuickStart")
 						QuickStart = ParseBool(value);
+					else if (key == "UnlockMethod")
+					{
+						auto parsed = std::stoul(value);
+						if (parsed < static_cast<uint32_t>(UnlockMethodType::Count))
+							UnlockMethod = static_cast<UnlockMethodType>(parsed);
+					}
 				}
 				catch (std::exception& e)
 				{
@@ -170,12 +179,13 @@ namespace Settings
 		file << "NonBlockingErrors=" << BoolToString(NonBlockingErrors) << std::endl;
 		file << "SilentErrors=" << BoolToString(SilentErrors) << std::endl;
 		file << "QuickStart=" << BoolToString(QuickStart) << std::endl;
+		file << "UnlockMethod=" << std::to_string(static_cast<uint32_t>(UnlockMethod)) << std::endl;
 
 		return true;
 	}
 
 	void Update()
 	{
-		SetFPSCapExternal(FPSCap);
+		RFU_SetFPSCap(FPSCap);
 	}
 }

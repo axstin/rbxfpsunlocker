@@ -4,4 +4,6 @@
 #define RFU_GITHUB_REPO "axstin/rbxfpsunlocker"
 
 bool CheckForUpdates();
-void SetFPSCapExternal(double value);
+void RFU_SetFPSCap(double value);
+void RFU_OnUIClose();
+void RFU_OnUIUnlockMethodChange();
