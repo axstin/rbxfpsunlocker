@@ -7,6 +7,7 @@
 #include <string>
 #include <filesystem>
 #include <optional>
+#include <memory>
 
 #define PAGE_READABLE (PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_READONLY | PAGE_READWRITE)
 
@@ -37,6 +38,48 @@ namespace ProcUtil
 		DWORD last_error;
 	};
 
+	struct ScopedHandle
+	{
+		HANDLE value = NULL;
+
+		ScopedHandle(HANDLE value) : value(value) {}
+		ScopedHandle(const ScopedHandle &) = delete;
+		ScopedHandle &operator=(const ScopedHandle &) = delete;
+
+		ScopedHandle(ScopedHandle &&other) noexcept
+		{
+			std::swap(value, other.value);
+		}
+
+		ScopedHandle &operator=(ScopedHandle &&other) noexcept
+		{
+			if (this != &other)
+			{
+				Close();
+				std::swap(value, other.value);
+			}
+			return *this;
+		}
+
+		bool IsOpen() const { return value != NULL; }
+		explicit operator bool() const { return IsOpen(); }
+		operator HANDLE() const { return value; }
+
+		void Close()
+		{
+			if (value)
+			{
+				CloseHandle(value);
+				value = NULL;
+			}
+		}
+		
+		~ScopedHandle()
+		{
+			Close();
+		}
+	};
+
 	struct ModuleInfo;
 	struct ProcessInfo;
 
@@ -44,7 +87,7 @@ namespace ProcUtil
 	std::vector<HANDLE> GetProcessesByImageName(const char *image_name, DWORD access, size_t limit = -1);
 	HANDLE GetProcessByImageName(const char* image_name);
 
-	std::vector<ModuleInfo> GetProcessModules(HANDLE process);
+	std::vector<ModuleInfo> GetProcessModules(DWORD process_id, size_t limit = -1);
 	ModuleInfo GetMainModuleInfo(HANDLE process);
 	bool FindModuleInfo(HANDLE process, const std::filesystem::path& name, ModuleInfo& out);
 	void *ScanProcess(HANDLE process, const char *aob, const char *mask, const uint8_t *start = nullptr, const uint8_t *end = (const uint8_t *)UINTPTR_MAX);
@@ -93,6 +136,7 @@ namespace ProcUtil
 		}
 	};
 
+	// todo: ew. refactor
 	struct ProcessInfo
 	{
 		HANDLE handle = NULL;

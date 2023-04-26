@@ -54,18 +54,20 @@ HANDLE ProcUtil::GetProcessByImageName(const char* image_name)
 	return processes.size() > 0 ? processes[0] : NULL;
 }
 
-std::vector<ProcUtil::ModuleInfo> ProcUtil::GetProcessModules(HANDLE process)
+std::vector<ProcUtil::ModuleInfo> ProcUtil::GetProcessModules(DWORD process_id, size_t limit)
 {
+	if (!process_id) return {};
+
 	std::vector<ProcUtil::ModuleInfo> result;
 
-	MODULEENTRY32 entry;
-	entry.dwSize = sizeof(MODULEENTRY32);
+	MODULEENTRY32W entry;
+	entry.dwSize = sizeof(MODULEENTRY32W);
 
-	HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, GetProcessId(process));
+	HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, process_id);
 	if (snapshot == INVALID_HANDLE_VALUE)
 		throw WindowsException("unable to enum modules");
 
-	if (Module32First(snapshot, &entry) == TRUE)
+	if (Module32FirstW(snapshot, &entry) == TRUE)
 	{
 		do
 		{
@@ -74,7 +76,7 @@ std::vector<ProcUtil::ModuleInfo> ProcUtil::GetProcessModules(HANDLE process)
 			info.base = entry.modBaseAddr;
 			info.size = entry.modBaseSize;
 			result.push_back(std::move(info));
-		} while (Module32Next(snapshot, &entry) == TRUE);
+		} while (result.size() < limit && Module32NextW(snapshot, &entry) == TRUE);
 	}
 
 	CloseHandle(snapshot);
@@ -119,7 +121,7 @@ bool ProcUtil::FindModuleInfo(HANDLE process, const std::filesystem::path& path,
 {
 	printf("[ProcUtil] FindModuleInfo(%p, %s)\n", process, path.string().c_str());
 
-	for (const auto &info : GetProcessModules(process))
+	for (const auto &info : GetProcessModules(GetProcessId(process)))
 	{
 		try
 		{
