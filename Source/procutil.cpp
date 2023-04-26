@@ -7,9 +7,9 @@
 
 #define READ_LIMIT (1024 * 1024 * 2) // 2 MB
 
-std::vector<HANDLE> ProcUtil::GetProcessesByImageName(const char *image_name, DWORD access, size_t limit)
+std::vector<DWORD> ProcUtil::GetProcessIdsByImageName(const char *image_name, size_t limit)
 {
-	std::vector<HANDLE> result;
+	std::vector<DWORD> result;
 
 	PROCESSENTRY32 entry;
 	entry.dwSize = sizeof(PROCESSENTRY32);
@@ -23,16 +23,28 @@ std::vector<HANDLE> ProcUtil::GetProcessesByImageName(const char *image_name, DW
 		{
 			if (_stricmp(entry.szExeFile, image_name) == 0)
 			{
-				if (HANDLE process = OpenProcess(access, FALSE, entry.th32ProcessID))
-				{
-					result.push_back(process);
-					count++;
-				}
+				result.push_back(entry.th32ProcessID);
+				count++;
 			}
 		}
 	}
 
 	CloseHandle(snapshot);
+	return result;
+}
+
+std::vector<HANDLE> ProcUtil::GetProcessesByImageName(const char *image_name, DWORD access, size_t limit)
+{
+	std::vector<HANDLE> result;
+
+	for (DWORD pid : GetProcessIdsByImageName(image_name, limit))
+	{
+		if (HANDLE process = OpenProcess(access, FALSE, pid))
+		{
+			result.push_back(process);
+		}
+	}
+
 	return result;
 }
 
@@ -145,6 +157,10 @@ void *ScanRegion(HANDLE process, const char *aob, const char *mask, const uint8_
 				return (uint8_t *)base + (result - buffer.data());
 			}
 		}
+		else
+		{
+			return nullptr;
+		}
 	   
 		if (bytes_read > aob_len) bytes_read -= aob_len;
 
@@ -152,7 +168,7 @@ void *ScanRegion(HANDLE process, const char *aob, const char *mask, const uint8_
 		base += bytes_read;
 	}
 
-	return false;
+	return nullptr;
 }
 
 

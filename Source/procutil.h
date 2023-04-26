@@ -40,6 +40,7 @@ namespace ProcUtil
 	struct ModuleInfo;
 	struct ProcessInfo;
 
+	std::vector<DWORD> GetProcessIdsByImageName(const char *image_name, size_t limit = -1);
 	std::vector<HANDLE> GetProcessesByImageName(const char *image_name, DWORD access, size_t limit = -1);
 	HANDLE GetProcessByImageName(const char* image_name);
 

@@ -34,16 +34,22 @@ enum class RobloxHandleType
 
 struct RobloxProcessHandle
 {
+	DWORD id;
 	HANDLE handle;
 	RobloxHandleType type;
 	bool can_write;
 
-	RobloxProcessHandle(HANDLE handle = NULL, RobloxHandleType type = RobloxHandleType::None, bool can_write = false) : handle(handle), type(type), can_write(can_write) {};
+	RobloxProcessHandle(DWORD process_id = 0, RobloxHandleType type = RobloxHandleType::None, bool open = false) : id(process_id), handle(NULL), type(type), can_write(false)
+	{
+		if (open) Open();
+	};
+
 	RobloxProcessHandle(const RobloxProcessHandle &) = delete;
 	RobloxProcessHandle &operator=(const RobloxProcessHandle &) = delete;
 
 	RobloxProcessHandle(RobloxProcessHandle &&other) noexcept
 	{
+		std::swap(id, other.id);
 		std::swap(handle, other.handle);
 		std::swap(type, other.type);
 		std::swap(can_write, other.can_write);
@@ -54,6 +60,7 @@ struct RobloxProcessHandle
 		if (this != &other)
 		{
 			if (handle) CloseHandle(handle);
+			id = std::exchange(other.id, {});
 			handle = std::exchange(other.handle, {});
 			type = std::exchange(other.type, {});
 			can_write = std::exchange(other.can_write, {});
@@ -68,6 +75,23 @@ struct RobloxProcessHandle
 			//printf("[%p] Closing handle with type=%u, can_write=%u\n", handle, type, can_write);
 			CloseHandle(handle);
 		}
+	}
+
+	bool IsValid() const
+	{
+		return id != 0;
+	}
+
+	bool IsOpen() const
+	{
+		return handle != NULL;
+	}
+
+	bool Open()
+	{
+		can_write = type == RobloxHandleType::Studio;
+		handle = OpenProcess(can_write ? ROBLOX_WRITE_ACCESS : ROBLOX_BASIC_ACCESS, FALSE, id);
+		return handle != NULL;
 	}
 
 	HANDLE CreateWriteHandle() const
@@ -107,28 +131,18 @@ struct RobloxProcessHandle
 	}
 };
 
-std::vector<RobloxProcessHandle> GetRobloxProcesses(bool include_client = true, bool include_studio = true)
+std::vector<RobloxProcessHandle> GetRobloxProcesses(bool open_all = true, bool include_client = true, bool include_studio = true)
 {
 	std::vector<RobloxProcessHandle> result;
 	if (include_client)
 	{
-		for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxPlayerBeta.exe", ROBLOX_BASIC_ACCESS))
-		{
-			// Roblox has a security daemon process that runs under the same name as the client (as of 3/2/22 update). Don't unlock it.
-			BOOL debugged = FALSE;
-			CheckRemoteDebuggerPresent(handle, &debugged);
-			if (!debugged)
-			{
-				result.emplace_back(handle, RobloxHandleType::Client, false);
-			}
-			else
-			{
-				CloseHandle(handle);
-			}
-		}
-		for (HANDLE handle : ProcUtil::GetProcessesByImageName("Windows10Universal.exe", ROBLOX_BASIC_ACCESS)) result.emplace_back(handle, RobloxHandleType::UWP, false);
+		for (auto pid : ProcUtil::GetProcessIdsByImageName("RobloxPlayerBeta.exe")) result.emplace_back(pid, RobloxHandleType::Client, open_all);
+		for (auto pid : ProcUtil::GetProcessIdsByImageName("Windows10Universal.exe")) result.emplace_back(pid, RobloxHandleType::UWP, open_all);
 	}
-	if (include_studio) for (HANDLE handle : ProcUtil::GetProcessesByImageName("RobloxStudioBeta.exe", ROBLOX_WRITE_ACCESS)) result.emplace_back(handle, RobloxHandleType::Studio, true);
+	if (include_studio)
+	{
+		for (auto pid : ProcUtil::GetProcessIdsByImageName("RobloxStudioBeta.exe")) result.emplace_back(pid, RobloxHandleType::Studio, open_all);
+	}
 	return result;
 }
 
@@ -137,7 +151,7 @@ RobloxProcessHandle GetRobloxProcess()
 	auto processes = GetRobloxProcesses();
 
 	if (processes.empty())
-		return NULL;
+		return {};
 
 	if (processes.size() == 1)
 		return std::move(processes[0]);
@@ -298,6 +312,8 @@ class RobloxProcess
 	{
 		// todo: add support for registry read
 
+		if (cap == 0) cap = 5588562;
+
 		auto settings_file_path = GetClientAppSettingsFilePath();
 		printf("[%p] Updating DFIntTaskSchedulerTargetFps in %ls to %d\n", process.handle, settings_file_path.c_str(), cap);
 
@@ -305,7 +321,7 @@ class RobloxProcess
 
 		// read
 		auto current_cap = FetchTargetFpsDiskValue(&object);
-		if ((current_cap.has_value() && *current_cap == cap) || (!current_cap.has_value() && cap <= 0))
+		if ((current_cap.has_value() && *current_cap == cap) || (!current_cap.has_value() && cap < 0))
 		{
 			return;
 		}
@@ -466,7 +482,8 @@ class RobloxProcess
 					}
 				}
 			}
-		} catch (ProcUtil::WindowsException &e)
+		}
+		catch (ProcUtil::WindowsException &e)
 		{
 		}
 
@@ -680,14 +697,15 @@ DWORD WINAPI WatchThread(LPVOID)
 	while (1)
 	{
 		{
-			auto processes = GetRobloxProcesses(Settings::UnlockClient, Settings::UnlockStudio);
+			auto processes = GetRobloxProcesses(false, Settings::UnlockClient, Settings::UnlockStudio);
 
 			for (auto &process : processes)
 			{
-				DWORD id = GetProcessId(process.handle);
-
+				auto id = process.id;
 				if (AttachedProcesses.find(id) == AttachedProcesses.end())
 				{
+					assert(!process.IsOpen());
+					process.Open();
 					printf("Injecting into new process %p (pid %d)\n", process.handle, id);
 
 					RobloxProcess roblox_process;
@@ -766,7 +784,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 			Sleep(100);
 			process = GetRobloxProcess();
 		}
-		while (!process.handle);
+		while (!process.IsValid());
 
 		printf("Found Roblox...\n");
 		printf("Attaching...\n");
@@ -807,7 +825,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 			{
 				printf("Minimizing to system tray in 2 seconds...\n");
 				Sleep(2000);
+#ifdef NDEBUG
 				UI::ToggleConsole();
+#endif
 			}
 
 			return UI::Start(hInstance, WatchThread);
