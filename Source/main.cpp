@@ -248,7 +248,7 @@ void WriteClientAppSettingsFile(const std::filesystem::path &version_folder, int
 	nlohmann::json object{};
 
 	// read
-	auto current_cap = FetchTargetFpsDiskValue(version_folder);
+	auto current_cap = FetchTargetFpsDiskValue(version_folder, &object);
 	if ((current_cap.has_value() && *current_cap == cap) || (!current_cap.has_value() && cap < 0))
 	{
 		return;
