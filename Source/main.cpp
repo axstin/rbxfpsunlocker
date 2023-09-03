@@ -451,19 +451,19 @@ class RobloxInstance
 						}
 					}
 				}
-				// 55 8B EC 83 E4 F8 83 EC 14 56 E8 ?? ?? ?? ?? 8D 4C 24 10
-				else if (auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x14\x56\xE8\x00\x00\x00\x00\x8D\x4C\x24\x10", "xxxxxxxxxxx????xxxx", start, end))
+				// 55 8B EC 53 56 57 8B F9 E8 ?? ?? ?? ?? 8B D8
+				else if (auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x55\x8B\xEC\x53\x56\x57\x8B\xF9\xE8\x00\x00\x00\x00\x8B\xD8", "xxxxxxxxx????xx", start, end))
 				{
-					auto gts_fn = result + 15 + ProcUtil::Read<int32_t>(handle, result + 11);
+					auto gts_fn = result + 13 + ProcUtil::Read<int32_t>(handle, result + 9);
 
 					printf("[%u] GetTaskScheduler (sig uwp): %p\n", process.id, gts_fn);
 
 					uint8_t buffer[0x100];
 					if (ProcUtil::Read(handle, gts_fn, buffer, sizeof(buffer)))
 					{
-						if (auto inst = sigscan::scan("\xA1\x00\x00\x00\x00\x8B\x4D\xF4", "x????xxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
+						if (auto inst = sigscan::scan("\x50\xA1\x00\x00\x00\x00\x8B\x4D\xF4", "xx????xxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
 						{
-							ts_ptr_candidates = { (const void *)(*(uint32_t *)(inst + 1)) };
+							ts_ptr_candidates = { (const void *)(*(uint32_t *)(inst + 2)) };
 							return true;
 						}
 					}
