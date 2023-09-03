@@ -8,6 +8,7 @@
 #include <cerrno>
 
 // todo: jesus this is ugly rewrite all this if i ever care enough
+// todo: do the above todo. we have advanced technology now (json)
 
 const char *advance(const char *ptr)
 {
@@ -72,22 +73,25 @@ std::string DoubleArrayToString(const std::vector<double> &array)
 
 namespace Settings
 {
-	bool VSyncEnabled = false;
 	std::vector<double> FPSCapValues = { 30, 60, 75, 120, 144, 165, 240, 360 };
 	uint32_t FPSCapSelection = 0;
 	double FPSCap = 0.0;
 	bool UnlockClient = true;
 	bool UnlockStudio = false;
 	bool CheckForUpdates = true;
+	bool AltEnterFix = false;
 	bool NonBlockingErrors = true;
 	bool SilentErrors = false;
 	bool QuickStart = false;
+	bool RevertFlagsOnClose = true;
 	UnlockMethodType UnlockMethod = UnlockMethodType::Hybrid;
 
 	bool Init()
 	{
-		if (!Load()) Save();
-		Update();
+		if (!Load())
+		{
+			Save();
+		}
 		return true;
 	}
 
@@ -112,9 +116,7 @@ namespace Settings
 
 				try
 				{
-					if (key == "VSyncEnabled")
-						VSyncEnabled = ParseBool(value);
-					else if (key == "FPSCapValues")
+					if (key == "FPSCapValues")
 						FPSCapValues = ParseDoubleArray(value, 100);
 					else if (key == "FPSCapSelection")
 						FPSCapSelection = std::stoul(value);
@@ -126,12 +128,16 @@ namespace Settings
 						UnlockStudio = ParseBool(value);
 					else if (key == "CheckForUpdates")
 						CheckForUpdates = ParseBool(value);
+					else if (key == "AltEnterFix")
+						AltEnterFix = ParseBool(value);
 					else if (key == "NonBlockingErrors")
 						NonBlockingErrors = ParseBool(value);
 					else if (key == "SilentErrors")
 						SilentErrors = ParseBool(value);
 					else if (key == "QuickStart")
 						QuickStart = ParseBool(value);
+					else if (key == "RevertFlagsOnClose")
+						RevertFlagsOnClose = ParseBool(value);
 					else if (key == "UnlockMethod")
 					{
 						auto parsed = std::stoul(value);
@@ -158,8 +164,6 @@ namespace Settings
 
 		FPSCap = FPSCapSelection == 0 ? 0.0 : FPSCapValues[FPSCapSelection - 1];
 
-		Update();
-
 		return true;
 	}
 
@@ -176,16 +180,13 @@ namespace Settings
 		file << "FPSCapSelection=" << std::to_string(FPSCapSelection) << std::endl;
 		file << "FPSCap=" << std::to_string(FPSCap) << std::endl;
 		file << "CheckForUpdates=" << BoolToString(CheckForUpdates) << std::endl;
+		file << "AltEnterFix=" << BoolToString(AltEnterFix) << std::endl;
 		file << "NonBlockingErrors=" << BoolToString(NonBlockingErrors) << std::endl;
 		file << "SilentErrors=" << BoolToString(SilentErrors) << std::endl;
 		file << "QuickStart=" << BoolToString(QuickStart) << std::endl;
+		file << "RevertFlagsOnClose=" << BoolToString(RevertFlagsOnClose) << std::endl;
 		file << "UnlockMethod=" << std::to_string(static_cast<uint32_t>(UnlockMethod)) << std::endl;
 
 		return true;
-	}
-
-	void Update()
-	{
-		RFU_SetFPSCap(FPSCap);
 	}
 }

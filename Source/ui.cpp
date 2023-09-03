@@ -12,7 +12,7 @@
 #define RFU_TRAYMENU_APC			(WM_APP + 2)
 #define RFU_TRAYMENU_CONSOLE		(WM_APP + 3)
 #define RFU_TRAYMENU_EXIT			(WM_APP + 4)
-#define RFU_TRAYMENU_VSYNC			(WM_APP + 5)
+#define RFU_TRAYMENU_ALTENTERFIX	(WM_APP + 5)
 #define RFU_TRAYMENU_LOADSET		(WM_APP + 6)
 #define RFU_TRAYMENU_GITHUB			(WM_APP + 7)
 #define RFU_TRAYMENU_STUDIO			(WM_APP + 8)
@@ -20,15 +20,16 @@
 #define RFU_TRAYMENU_ADV_NBE		(WM_APP + 10)
 #define RFU_TRAYMENU_ADV_SE			(WM_APP + 11)
 #define RFU_TRAYMENU_ADV_QS			(WM_APP + 12)
-#define RFU_TRAYMENU_CLIENT			(WM_APP + 13)
+#define RFU_TRAYMENU_ADV_RFOC		(WM_APP + 13)
+#define RFU_TRAYMENU_CLIENT			(WM_APP + 14)
 
-#define RFU_TRAYMENU_UM				(WM_APP + 14)
+#define RFU_TRAYMENU_UM				(WM_APP + 15)
 #define RFU_TRAYMENU_UM_HYBRID		(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::Hybrid))
 #define RFU_TRAYMENU_UM_MEMWRITE	(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::MemoryWrite))
 #define RFU_TRAYMENU_UM_FLAGSFILE	(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::FlagsFile))
 #define RFU_TRAYMENU_UM_LAST		(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::Count) - 1)
 
-#define RFU_FCS_FIRST				(WM_APP + 20)
+#define RFU_FCS_FIRST				(WM_APP + 30)
 #define RFU_FCS_NONE				RFU_FCS_FIRST
 
 HWND UI::Window = NULL;
@@ -59,7 +60,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			AppendMenu(popup, MF_STRING | (Settings::UnlockClient ? MF_CHECKED : 0), RFU_TRAYMENU_CLIENT, "Unlock Roblox Player");
 			AppendMenu(popup, MF_STRING | (Settings::UnlockStudio ? MF_CHECKED : 0), RFU_TRAYMENU_STUDIO, "Unlock Roblox Studio");
-			AppendMenu(popup, MF_STRING | (Settings::CheckForUpdates ? MF_CHECKED : 0), RFU_TRAYMENU_CFU, "Check for Updates");
 
 			HMENU submenu = CreatePopupMenu();
 			AppendMenu(submenu, MF_STRING, RFU_FCS_NONE, "None");
@@ -85,10 +85,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			CheckMenuRadioItem(unlock_method, RFU_TRAYMENU_UM, RFU_TRAYMENU_UM_LAST, RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethod), MF_BYCOMMAND);
 			AppendMenu(popup, MF_POPUP, (UINT_PTR)unlock_method, "Unlock Method");
 
+			AppendMenu(popup, MF_STRING | (Settings::AltEnterFix ? MF_CHECKED : 0), RFU_TRAYMENU_ALTENTERFIX, "Alt-Enter Fix");
+
+			AppendMenu(popup, MF_STRING | (Settings::CheckForUpdates ? MF_CHECKED : 0), RFU_TRAYMENU_CFU, "Check for Updates");
+
 			HMENU advanced = CreatePopupMenu();
 			AppendMenu(advanced, MF_STRING | (Settings::SilentErrors ? MF_CHECKED : 0), RFU_TRAYMENU_ADV_SE, "Silent Errors");
 			AppendMenu(advanced, MF_STRING | (Settings::SilentErrors ? MF_GRAYED : 0) | (Settings::NonBlockingErrors ? MF_CHECKED : 0), RFU_TRAYMENU_ADV_NBE, "Use Console Errors");
 			AppendMenu(advanced, MF_STRING | (Settings::QuickStart ? MF_CHECKED : 0), RFU_TRAYMENU_ADV_QS, "Quick Start");
+			AppendMenu(advanced, MF_STRING | (Settings::RevertFlagsOnClose ? MF_CHECKED : 0), RFU_TRAYMENU_ADV_RFOC, "Revert Flags on Close");
 			AppendMenu(popup, MF_POPUP, (UINT_PTR)advanced, "Advanced");
 
 			AppendMenu(popup, MF_SEPARATOR, 0, NULL);
@@ -102,10 +107,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			if (result != 0)
 			{
+				uint32_t event_flags{};
+
 				switch (result)
 				{
 				case RFU_TRAYMENU_EXIT:
-					RFU_OnUIClose();
+					RFU::OnEvent(RFU::Event::CLOSE_APP);
 					Shell_NotifyIcon(NIM_DELETE, &NotifyIconData);
 					TerminateThread(WatchThread, 0);
 					FreeConsole();
@@ -122,22 +129,30 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 				case RFU_TRAYMENU_LOADSET:
 					Settings::Load();
-					Settings::Update();
+					event_flags |= RFU::Event::SETTINGS_MASK;
 					break;
 
 				case RFU_TRAYMENU_CLIENT:
 					Settings::UnlockClient = !Settings::UnlockClient;
 					CheckMenuItem(popup, RFU_TRAYMENU_CLIENT, Settings::UnlockClient ? MF_CHECKED : MF_UNCHECKED);
+					event_flags |= RFU::Event::UNLOCK_CLIENT;
 					break;
 
 				case RFU_TRAYMENU_STUDIO:
 					Settings::UnlockStudio = !Settings::UnlockStudio;
 					CheckMenuItem(popup, RFU_TRAYMENU_STUDIO, Settings::UnlockStudio ? MF_CHECKED : MF_UNCHECKED);
+					event_flags |= RFU::Event::UNLOCK_STUDIO;
 					break;
 
 				case RFU_TRAYMENU_CFU:
 					Settings::CheckForUpdates = !Settings::CheckForUpdates;
 					CheckMenuItem(popup, RFU_TRAYMENU_CFU, Settings::CheckForUpdates ? MF_CHECKED : MF_UNCHECKED);
+					break;
+
+				case RFU_TRAYMENU_ALTENTERFIX:
+					Settings::AltEnterFix = !Settings::AltEnterFix;
+					CheckMenuItem(popup, RFU_TRAYMENU_ALTENTERFIX, Settings::AltEnterFix ? MF_CHECKED : MF_UNCHECKED);
+					event_flags |= RFU::Event::ALT_ENTER;
 					break;
 
 				case RFU_TRAYMENU_ADV_NBE:
@@ -156,12 +171,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					CheckMenuItem(popup, RFU_TRAYMENU_ADV_QS, Settings::QuickStart ? MF_CHECKED : MF_UNCHECKED);
 					break;
 
+				case RFU_TRAYMENU_ADV_RFOC:
+					Settings::RevertFlagsOnClose = !Settings::RevertFlagsOnClose;
+					CheckMenuItem(popup, RFU_TRAYMENU_ADV_RFOC, Settings::RevertFlagsOnClose ? MF_CHECKED : MF_UNCHECKED);
+					break;
+
 				default:
 					if (result >= RFU_FCS_FIRST
 						&& result <= RFU_FCS_FIRST + Settings::FPSCapValues.size())
 					{
 						Settings::FPSCapSelection = result - RFU_FCS_FIRST;
 						Settings::FPSCap = Settings::FPSCapSelection == 0 ? 0.0 : Settings::FPSCapValues[Settings::FPSCapSelection - 1];
+						event_flags |= RFU::Event::FPS_CAP;
 					}
 					else if (result >= RFU_TRAYMENU_UM
 						&& result <= RFU_TRAYMENU_UM_LAST)
@@ -170,9 +191,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 						Settings::UnlockMethod = static_cast<Settings::UnlockMethodType>(result - RFU_TRAYMENU_UM);
 						if (Settings::UnlockMethod != before)
 						{
-							RFU_OnUIUnlockMethodChange();
+							event_flags |= RFU::Event::UNLOCK_METHOD;
 						}					
 					}
+				}
+
+				if (event_flags != 0)
+				{
+					RFU::OnEvent(event_flags);
 				}
 
 				if (result != RFU_TRAYMENU_CONSOLE
@@ -180,7 +206,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					&& result != RFU_TRAYMENU_GITHUB
 					&& result != RFU_TRAYMENU_EXIT)
 				{
-					Settings::Update();
 					Settings::Save();
 				}
 			}

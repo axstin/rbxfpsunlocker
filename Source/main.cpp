@@ -1,5 +1,6 @@
 #include <Windows.h>
 #include <iostream>
+#include <sstream>
 #include <vector>
 #include <codecvt>
 #include <unordered_map>
@@ -19,7 +20,7 @@
 #include "rfu.h"
 #include "procutil.h"
 #include "sigscan.h"
-#include "nlohmann.hpp"
+#include "fflags.hpp"
 
 #define ROBLOX_BASIC_ACCESS (PROCESS_QUERY_INFORMATION | PROCESS_VM_READ)
 #define	ROBLOX_WRITE_ACCESS (PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE)
@@ -202,83 +203,54 @@ void NotifyError(const char* title, const char* error)
 	}
 }
 
-std::optional<int> FetchTargetFpsDiskValue(const std::filesystem::path &version_folder, nlohmann::json *object_out = nullptr)
+bool RobloxFFlags::apply(bool prompt)
 {
-	std::ifstream file(version_folder / "ClientSettings" / "ClientAppSettings.json");
-
-	if (file.is_open())
+	if (target_fps_mod || alt_enter_mod)
 	{
-		nlohmann::json object = nlohmann::json::parse(file, nullptr, false);
-		if (!object.is_discarded())
-		{
-			std::optional<int> result{};
-
-			if (object.contains("DFIntTaskSchedulerTargetFps"))
-			{
-				auto target_fps = object["DFIntTaskSchedulerTargetFps"];
-				if (target_fps.is_number_integer())
-				{
-					result = target_fps.get<int>();
-				}
-			}
-
-			if (object_out)
-				*object_out = std::move(object);
-
-			return result;
-		}
-	}
-
-	return std::nullopt;
-}
-
-bool IsTargetFpsFlagActive(const std::filesystem::path &version_folder)
-{
-	auto value = FetchTargetFpsDiskValue(version_folder);
-	return value.has_value() && *value > 0;
-}
-
-void WriteClientAppSettingsFile(const std::filesystem::path &version_folder, int cap, bool prompt)
-{
-	if (cap == 0) cap = 5588562;
-
-	const auto settings_file_path = version_folder / "ClientSettings" / "ClientAppSettings.json";
-	printf("DFIntTaskSchedulerTargetFps update requested for %ls to %d\n", settings_file_path.c_str(), cap);
-
-	nlohmann::json object{};
-
-	// read
-	auto current_cap = FetchTargetFpsDiskValue(version_folder, &object);
-	if ((current_cap.has_value() && *current_cap == cap) || (!current_cap.has_value() && cap < 0))
-	{
-		return;
-	}
-
-	// update
-	object["DFIntTaskSchedulerTargetFps"] = cap;
-
-	// try write
-	{
-		std::error_code ec{};
-		std::filesystem::create_directory(settings_file_path.parent_path(), ec);
-
-		std::ofstream file(settings_file_path);
-		if (!file.is_open())
+		if (!write_disk())
 		{
 			NotifyError("rbxfpsunlocker Error", "Failed to write ClientAppSettings.json! If running the Windows Store version of Roblox, try running Roblox FPS Unlocker as administrator or using a different unlock method.");
-			return;
+			return false;
 		}
-		file << object.dump(4);
-		printf("ClientAppSettings.json updated successfully\n");
+
+		auto target_fps_value = target_fps();
+		auto alt_enter_value = alt_enter();
+
+		printf("Wrote flags to %ls (target_fps=", settings_file_path.c_str());
+		if (target_fps_value) printf("%llu", *target_fps_value); else printf("null");
+		printf(", alt_enter=");
+		if (alt_enter_value) printf("%u", *alt_enter_value); else printf("null");
+		printf(")\n");
+
+
+		if (prompt)
+		{
+			std::stringstream stream{};
+			if (target_fps_mod)
+			{
+				stream << "Set DFIntTaskSchedulerTargetFps to ";
+				auto value = target_fps();
+				if (value) stream << *value; else stream << "<null>";
+				stream << "\n";
+			}
+			if (alt_enter_mod)
+			{
+				stream << "Set FFlagHandleAltEnterFullscreenManually to ";
+				auto value = alt_enter();
+				if (value) stream << *value; else stream << "<null>";
+			}
+			stream << "\n\nin " << settings_file_path << "\n\nRestarting Roblox may be required for changes to take effect.";
+
+			MessageBoxA(UI::Window, stream.str().c_str(), "rbxfpsunlocker", MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
+		}
+
+		target_fps_mod = false;
+		alt_enter_mod = false;
+
+		return true;
 	}
 
-	// prompt
-	if (prompt)
-	{
-		char message[512]{};
-		sprintf_s(message, "Set DFIntTaskSchedulerTargetFps to %d in %ls\n\nRestarting Roblox may be required for changes to take effect.", cap, settings_file_path.c_str());
-		MessageBoxA(UI::Window, message, "rbxfpsunlocker", MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
-	}
+	return false;
 }
 
 bool CheckExecutableFile64Bit(const std::filesystem::path &path)
@@ -298,11 +270,12 @@ bool CheckExecutableFile64Bit(const std::filesystem::path &path)
 	return headers.OptionalHeader.Magic == 0x020B;
 }
 
-class RobloxProcess
+class RobloxInstance
 {
+	std::filesystem::path version_folder{};
+	bool is_client = false;
 
 	RobloxProcessHandle process{};
-	std::filesystem::path version_folder{};
 
 	ProcUtil::ModuleInfo main_module{};
 	std::vector<const void *> ts_ptr_candidates; // task scheduler pointer candidates
@@ -339,17 +312,12 @@ class RobloxProcess
 	{
 		if (process.IsOpen())
 		{
-			return process.type != RobloxHandleType::Studio && ProcUtil::IsProcess64Bit(process.Handle());
+			return is_client && ProcUtil::IsProcess64Bit(process.Handle());
 		}
 		else
 		{
-			return process.type != RobloxHandleType::Studio && CheckExecutableFile64Bit(version_folder / "RobloxPlayerBeta.exe");
+			return is_client && CheckExecutableFile64Bit(version_folder / "RobloxPlayerBeta.exe");
 		}
-	}
-
-	void WriteFlagsFile(int cap)
-	{
-		WriteClientAppSettingsFile(version_folder, cap, true);
 	}
 
 	void SetFPSCapInMemory(double cap)
@@ -515,20 +483,39 @@ class RobloxProcess
 	}
 
 public:
+	RobloxInstance() {}
+	RobloxInstance(std::filesystem::path version_folder, bool is_client) : version_folder(std::move(version_folder)), is_client(is_client) {}
+
 	const RobloxProcessHandle &GetHandle() const
 	{
 		return process;
 	}
 
-	bool Attach(const RobloxProcessHandle &handle, int retry_count)
+	bool IsClient() const
+	{
+		return is_client;
+	}
+
+	bool IsStudio() const
+	{
+		return !is_client;
+	}
+
+	bool IsRegistryInstance() const
+	{
+		return !process.IsValid();
+	}
+
+	bool AttachProcess(const RobloxProcessHandle &handle, int retry_count)
 	{
 		process = handle;
 		version_folder = process.FetchPath().parent_path(); // note: CreateToolhelp32Snapshot opens a handle momentarily here
+		is_client = handle.type != RobloxHandleType::Studio;
 		retries_left = retry_count;
 
 		printf("[%u] Attached to PID %u, version folder %ls\n", process.id, process.id, version_folder.c_str());
 
-		OnUnlockMethodUpdate();
+		OnEvent(RFU::Event::SETTINGS_MASK);
 		MemoryWriteTick();
 
 		return !ts_ptr_candidates.empty() && fd_ptr != nullptr;
@@ -611,7 +598,7 @@ public:
 						fd_ptr = scheduler + delay_offset;
 
 						// first write
-						SetFPSCap(Settings::FPSCap);
+						SetFPSCapInMemory(Settings::FPSCap);
 						return;
 					}
 					else
@@ -636,37 +623,53 @@ public:
 		}
 	}
 
-	void SetFPSCap(double cap)
-	{
-		if (use_flags_file)
+	void OnEvent(uint32_t ev_flags)
+	{		
+		if (ev_flags & RFU::Event::CLOSE_MASK)
 		{
-			WriteFlagsFile(cap);
-		}
-		else
-		{
-			SetFPSCapInMemory(cap);
-		}
-	}
+			printf("[%u] Closing instance (IsRegistryInstance=%u, RevertFlagsOnClose=%u)\n", process.id, IsRegistryInstance(), Settings::RevertFlagsOnClose);
 
-	void OnUIClose()
-	{
-		SetFPSCapInMemory(60.0);
-	}
+			if (ev_flags == RFU::Event::CLOSE_APP && Settings::RevertFlagsOnClose)
+			{
+				RobloxFFlags(version_folder).set_target_fps(std::nullopt).set_alt_enter_flag(std::nullopt).apply(false);
+			}
 
-	void OnUnlockMethodUpdate()
-	{
-		if (Settings::UnlockMethod == Settings::UnlockMethodType::FlagsFile
-			|| (Settings::UnlockMethod == Settings::UnlockMethodType::Hybrid && IsLikelyAntiCheatProtected()))
-		{
-			printf("[%u] Using FlagsFile mode\n", process.id);
-			use_flags_file = true;
-			WriteFlagsFile(Settings::FPSCap);
+			SetFPSCapInMemory(60.0);
 		}
-		else
+		else if (ev_flags & RFU::Event::SETTINGS_MASK)
 		{
-			printf("[%u] Using MemoryWrite mode\n", process.id);
-			if (use_flags_file || IsTargetFpsFlagActive(version_folder)) WriteFlagsFile(-1);
-			use_flags_file = false;
+			RobloxFFlags fflags(version_folder);
+
+			if (ev_flags & RFU::Event::UNLOCK_METHOD)
+			{
+				if (Settings::UnlockMethod == Settings::UnlockMethodType::FlagsFile
+					|| (Settings::UnlockMethod == Settings::UnlockMethodType::Hybrid && IsLikelyAntiCheatProtected()))
+				{
+					printf("[%u] Using FlagsFile mode\n", process.id);
+					use_flags_file = true;
+					fflags.set_target_fps(Settings::FPSCap);
+				}
+				else
+				{
+					printf("[%u] Using MemoryWrite mode\n", process.id);
+					use_flags_file = false;
+					fflags.set_target_fps(std::nullopt);
+				}
+			}
+
+			if (ev_flags & RFU::Event::FPS_CAP)
+			{
+				if (use_flags_file) fflags.set_target_fps(Settings::FPSCap);
+				else SetFPSCapInMemory(Settings::FPSCap);
+			}
+
+			if (ev_flags & RFU::Event::ALT_ENTER)
+			{
+				fflags.set_alt_enter_flag(Settings::AltEnterFix ? alt_enter_t{false} : std::nullopt);
+			}
+
+			// write flags to disk. only prompt for live instances
+			fflags.apply(!IsRegistryInstance());
 		}
 	}
 };
@@ -712,88 +715,51 @@ std::filesystem::path GetCurrentStudioVersionPath()
 	return {};
 }
 
-void UpdateClientAppSettingsViaRegistry(int cap, bool unlock_method_update = false)
+using attached_instances_map_t = std::unordered_map<DWORD, RobloxInstance>;
+
+struct RFUContext
 {
-	if (Settings::UnlockClient)
-	{
-		auto path = GetCurrentClientVersionPath();
-		if (!path.empty())
-		{
-			if (Settings::UnlockMethod == Settings::UnlockMethodType::FlagsFile
-				|| (Settings::UnlockMethod == Settings::UnlockMethodType::Hybrid && CheckExecutableFile64Bit(path / "RobloxPlayerBeta.exe")))
-			{
-				WriteClientAppSettingsFile(path, cap, false);
-			}
-			else
-			{
-				// MemoryWrite or Hybrid w/ 32-bit client, clear flag
-				WriteClientAppSettingsFile(path, -1, false);
-			}
-		}
-	}
-	if (Settings::UnlockStudio)
-	{
-		auto path = GetCurrentStudioVersionPath();
-		if (!path.empty())
-		{
-			if (Settings::UnlockMethod == Settings::UnlockMethodType::FlagsFile)
-			{
-				WriteClientAppSettingsFile(path, cap, false);
-			}
-			else
-			{
-				// MemoryWrite or Hybrid, clear flag
-				WriteClientAppSettingsFile(path, -1, false);
-			}
-		}
-	}
-}
+	attached_instances_map_t attached_instances{};
+	bool unlocking_client = false;
+	bool unlocking_studio = false;
+};
 
-using attached_processes_map_t = std::unordered_map<DWORD, RobloxProcess>;
-
-std::tuple<std::unique_lock<std::mutex>, attached_processes_map_t *> GetAttachedProcesses()
+std::tuple<std::unique_lock<std::mutex>, RFUContext *> AcquireRFUContext()
 {
 	static std::mutex mutex;
-	static attached_processes_map_t map;
+	static RFUContext context;
 
 	std::unique_lock lock(mutex);
-	return { std::move(lock), &map };
+	return { std::move(lock), &context };
 }
 
-void RFU_SetFPSCap(double value)
+void RFU::OnEvent(uint32_t ev)
 {
-	auto [lock, attached_processes] = GetAttachedProcesses();
+	auto [lock, context] = AcquireRFUContext();
 
-	// update attached processes
-	for (auto& it : *attached_processes)
+	// update live processes
+	for (auto &it : context->attached_instances)
 	{
-		it.second.SetFPSCap(value);
+		it.second.OnEvent(ev);
 	}
 
-	// update flags via registry
-	UpdateClientAppSettingsViaRegistry(value);
-}
-
-void RFU_OnUIUnlockMethodChange()
-{
-	auto [lock, attached_processes] = GetAttachedProcesses();
-
-	// update attached processes
-	for (auto &it : *attached_processes)
+	// update registry
+	if (context->unlocking_client)
 	{
-		it.second.OnUnlockMethodUpdate();
+		auto client_path = GetCurrentClientVersionPath();
+		if (!client_path.empty())
+		{
+			RobloxInstance(client_path, true).OnEvent(ev);
+		}
 	}
 
-	// update flags via registry
-	UpdateClientAppSettingsViaRegistry(Settings::FPSCap);
-}
-
-void RFU_OnUIClose()
-{
-	auto [lock, attached_processes] = GetAttachedProcesses();
-	for (auto &it : *attached_processes)
+	if (context->unlocking_studio)
 	{
-		it.second.OnUIClose();
+		auto studio_path = GetCurrentStudioVersionPath();
+		if (!studio_path.empty())
+		{
+			RobloxInstance(studio_path, false).OnEvent(ev);
+		}
 	}
 }
 
@@ -807,30 +773,28 @@ DWORD WINAPI WatchThread(LPVOID)
 {
 	printf("Watch thread started\n");
 
-	UpdateClientAppSettingsViaRegistry(Settings::FPSCap);
-
 	while (1)
 	{
 		{
-			auto [lock, attached_processes] = GetAttachedProcesses();
+			auto [lock, context] = AcquireRFUContext();
 			auto processes = GetRobloxProcesses(false, Settings::UnlockClient, Settings::UnlockStudio);
 
 			for (auto &process : processes)
 			{
 				auto id = process.id;
-				if (attached_processes->find(id) == attached_processes->end())
+				if (context->attached_instances.find(id) == context->attached_instances.end())
 				{
 					assert(!process.IsOpen());
 
-					RobloxProcess roblox_process;
-					roblox_process.Attach(process, 5);
-					(*attached_processes)[id] = std::move(roblox_process);
+					RobloxInstance roblox_process;
+					roblox_process.AttachProcess(process, 5);
+					context->attached_instances[id] = std::move(roblox_process);
 
-					printf("New size: %zu\n", attached_processes->size());
+					printf("New size: %zu\n", context->attached_instances.size());
 				}
 			}
 
-			for (auto it = attached_processes->begin(); it != attached_processes->end();)
+			for (auto it = context->attached_instances.begin(); it != context->attached_instances.end();)
 			{
 				if (std::find_if(processes.begin(), processes.end(), [&it](const RobloxProcessHandle &x) { return x.id == it->first; }) == processes.end())
 				{
@@ -847,8 +811,11 @@ DWORD WINAPI WatchThread(LPVOID)
 						printf("Purging dead process (pid %d)\n", handle.id);
 					}
 
-					it = attached_processes->erase(it);
-					printf("New size: %zu\n", attached_processes->size());
+					// close 
+					it->second.OnEvent(RFU::Event::CLOSE);
+
+					it = context->attached_instances.erase(it);
+					printf("New size: %zu\n", context->attached_instances.size());
 				}
 				else
 				{
@@ -857,7 +824,29 @@ DWORD WINAPI WatchThread(LPVOID)
 				}
 			}
 
-			UI::AttachedProcessesCount = attached_processes->size();
+			if (context->unlocking_client != Settings::UnlockClient)
+			{
+				auto path = GetCurrentClientVersionPath();
+				if (!path.empty())
+				{
+					RobloxInstance(path, true).OnEvent(Settings::UnlockClient ? RFU::Event::SETTINGS_MASK : RFU::Event::CLOSE);
+				}
+
+				context->unlocking_client = Settings::UnlockClient;
+			}
+
+			if (context->unlocking_studio != Settings::UnlockStudio)
+			{
+				auto path = GetCurrentStudioVersionPath();
+				if (!path.empty())
+				{
+					RobloxInstance(path, false).OnEvent(Settings::UnlockStudio ? RFU::Event::SETTINGS_MASK : RFU::Event::CLOSE);
+				}
+
+				context->unlocking_studio = Settings::UnlockStudio;
+			}
+
+			UI::AttachedProcessesCount = context->attached_instances.size();
 		}
 
 		Sleep(2000);
@@ -898,7 +887,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		printf("Waiting for Roblox...\n");
 
 		RobloxProcessHandle process;
-		RobloxProcess attacher{};
+		RobloxInstance attacher{};
 
 		do
 		{
@@ -910,7 +899,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		printf("Found Roblox...\n");
 		printf("Attaching...\n");
 
-		if (!attacher.Attach(process, 0))
+		if (!attacher.AttachProcess(process, 0))
 		{
 			printf("\nERROR: unable to attach to process\n");
 			pause();
@@ -939,7 +928,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 			if (Settings::CheckForUpdates)
 			{
 				printf("Checking for updates...\n");
-				if (CheckForUpdates()) return 0;
+				if (RFU::CheckForUpdates()) return 0;
 			}
 
 			if (!Settings::QuickStart)

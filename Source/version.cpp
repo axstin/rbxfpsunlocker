@@ -36,7 +36,7 @@ bool HttpRequest(const char *url, std::string &response)
 	return false;
 }
 
-bool CheckForUpdates()
+bool RFU::CheckForUpdates()
 {
 	std::string response;
 	if (!HttpRequest("https://api.github.com/repos/" RFU_GITHUB_REPO "/releases/latest", response))
