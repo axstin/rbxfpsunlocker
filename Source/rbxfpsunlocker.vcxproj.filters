@@ -56,6 +56,9 @@
     <ClInclude Include="nlohmann.hpp">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="fflags.hpp">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="rbxfpsunlocker.rc">
