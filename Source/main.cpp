@@ -285,7 +285,7 @@ class RobloxInstance
 
 	bool BlockingLoadModuleInfo()
 	{
-		int tries = 5;
+		int tries = 6;
 		int wait_time = 100;
 
 		printf("[%u] Finding process base...\n", process.id);

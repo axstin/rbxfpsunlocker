@@ -65,7 +65,14 @@ std::vector<ProcUtil::ModuleInfo> ProcUtil::GetProcessModules(DWORD process_id, 
 
 	HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, process_id);
 	if (snapshot == INVALID_HANDLE_VALUE)
-		throw WindowsException("unable to enum modules");
+	{
+		DWORD error_code = GetLastError();
+
+		printf("[%u] Could not create snapshot! Error code: %lu\n",
+			process_id,
+			error_code
+		);
+	}
 
 	if (Module32FirstW(snapshot, &entry) == TRUE)
 	{
