@@ -293,8 +293,21 @@ class RobloxInstance
 		while (true)
 		{
 			main_module = ProcUtil::GetMainModuleInfo(process.Handle());
+
 			if (main_module.base != nullptr)
-				return true;
+			{
+				MEMORY_BASIC_INFORMATION mbi{};
+				if (VirtualQueryEx(process.Handle(), main_module.base, &mbi, sizeof(mbi)) && mbi.Type == MEM_PRIVATE)
+				{
+					// We need the Hyperion-mapped Roblox base, not this
+					// This VirtualQueryEx check will fail eventually due to Hyperion stripping our handle
+					printf("[%u] WARNING: GetMainModuleInfo returned invalid base address\n", process.id);
+				}
+				else
+				{
+					return true;
+				}
+			}
 
 			if (tries--)
 			{
@@ -357,12 +370,15 @@ class RobloxInstance
 					uint8_t buffer[0x100];
 					if (ProcUtil::Read(handle, gts_fn, buffer, sizeof(buffer)))
 					{
-						if (auto inst = sigscan::scan("\x48\x8B\x05\x00\x00\x00\x00\x48\x83\xC4\x28", "xxx????xxxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
+						ts_ptr_candidates.clear();
+						auto inst = buffer;
+						while (inst = sigscan::scan("\x48\x8B\x05\x00\x00\x00\x00\x48\x83\xC4", "xxx????xxx", (uintptr_t)inst, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
 						{
 							const uint8_t *remote = gts_fn + (inst - buffer);
-							ts_ptr_candidates = { remote + 7 + *(int32_t *)(inst + 3) };
-							return true;
+							ts_ptr_candidates.push_back(remote + 7 + *(int32_t *)(inst + 3));
+							inst++;
 						}
+						return !ts_ptr_candidates.empty();
 					}
 				}
 				else
@@ -381,8 +397,8 @@ class RobloxInstance
 
 					while (i < stop)
 					{
-						// 48 8B 05 ?? ?? ?? ?? 48 83 C4 48 C3
-						auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x48\x8B\x05\x00\x00\x00\x00\x48\x83\xC4\x48\xC3", "xxx????xxxxx", i, stop); // mov rax, <Rel32>; add rsp, 48h; retn
+						// 48 8B 05 ?? ?? ?? ?? 48 83 C4 ?? 5B C3
+						auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x48\x8B\x05\x00\x00\x00\x00\x48\x83\xC4\x00\x5B\xC3", "xxx????xxx?xx", i, stop); // mov rax, <Rel32>; add rsp, 40h; pop rbx; retn
 						if (!result) break;
 						candidates.insert(result + 7 + ProcUtil::Read<int32_t>(handle, result + 3));
 						if (candidates.size() >= candidate_threshold) break;
