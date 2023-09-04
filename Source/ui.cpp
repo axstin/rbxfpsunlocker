@@ -112,7 +112,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				switch (result)
 				{
 				case RFU_TRAYMENU_EXIT:
-					RFU::OnEvent(RFU::Event::CLOSE_APP);
+					RFU::OnEvent(RFU::Event::APP_EXIT);
 					Shell_NotifyIcon(NIM_DELETE, &NotifyIconData);
 					TerminateThread(WatchThread, 0);
 					FreeConsole();

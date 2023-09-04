@@ -48,6 +48,20 @@ struct RobloxProcessHandle
 		if (open) Open();
 	};
 
+	bool ShouldAttach() const
+	{
+		switch (type)
+		{
+		case RobloxHandleType::Client:
+		case RobloxHandleType::UWP:
+			return Settings::UnlockClient;
+		case RobloxHandleType::Studio:
+			return Settings::UnlockStudio;
+		default:
+			return false;
+		}
+	}
+
 	bool IsValid() const
 	{
 		return id != 0;
@@ -110,7 +124,7 @@ struct RobloxProcessHandle
 	}
 };
 
-std::vector<RobloxProcessHandle> GetRobloxProcesses(bool open_all = true, bool include_client = true, bool include_studio = true)
+std::vector<RobloxProcessHandle> GetRobloxProcesses(bool open_all, bool include_client, bool include_studio)
 {
 	std::vector<RobloxProcessHandle> result;
 	if (include_client)
@@ -127,7 +141,7 @@ std::vector<RobloxProcessHandle> GetRobloxProcesses(bool open_all = true, bool i
 
 RobloxProcessHandle GetRobloxProcess()
 {
-	auto processes = GetRobloxProcesses();
+	auto processes = GetRobloxProcesses(true, true, true);
 
 	if (processes.empty())
 		return {};
@@ -645,9 +659,10 @@ public:
 		{
 			printf("[%u] Closing instance (IsRegistryInstance=%u, RevertFlagsOnClose=%u)\n", process.id, IsRegistryInstance(), Settings::RevertFlagsOnClose);
 
-			if (ev_flags == RFU::Event::CLOSE_APP && Settings::RevertFlagsOnClose)
+			// revert flags if process isn't dead
+			if (ev_flags != RFU::Event::PROCESS_DIED && Settings::RevertFlagsOnClose)
 			{
-				RobloxFFlags(version_folder).set_target_fps(std::nullopt).set_alt_enter_flag(std::nullopt).apply(false);
+				RobloxFFlags(version_folder).set_target_fps(std::nullopt).set_alt_enter_flag(std::nullopt).apply(ev_flags != RFU::Event::APP_EXIT && !IsRegistryInstance());
 			}
 
 			SetFPSCapInMemory(60.0);
@@ -793,29 +808,34 @@ DWORD WINAPI WatchThread(LPVOID)
 	{
 		{
 			auto [lock, context] = AcquireRFUContext();
-			auto processes = GetRobloxProcesses(false, Settings::UnlockClient, Settings::UnlockStudio);
+			auto processes = GetRobloxProcesses(false, true, true);
 
 			for (auto &process : processes)
 			{
 				auto id = process.id;
 				if (context->attached_instances.find(id) == context->attached_instances.end())
 				{
-					assert(!process.IsOpen());
+					// we found a process that isn't in our attached list
+					if (process.ShouldAttach())
+					{
+						assert(!process.IsOpen());
 
-					RobloxInstance roblox_process;
-					roblox_process.AttachProcess(process, 5);
-					context->attached_instances[id] = std::move(roblox_process);
+						RobloxInstance roblox_process;
+						roblox_process.AttachProcess(process, 5);
+						context->attached_instances[id] = std::move(roblox_process);
 
-					printf("New size: %zu\n", context->attached_instances.size());
+						printf("New size: %zu\n", context->attached_instances.size());
+					}
 				}
 			}
 
 			for (auto it = context->attached_instances.begin(); it != context->attached_instances.end();)
 			{
+				auto &handle = it->second.GetHandle();
+
 				if (std::find_if(processes.begin(), processes.end(), [&it](const RobloxProcessHandle &x) { return x.id == it->first; }) == processes.end())
 				{
 					// it's gone
-					auto &handle = it->second.GetHandle();
 					if (handle.IsOpen())
 					{
 						DWORD code = 0;
@@ -828,8 +848,16 @@ DWORD WINAPI WatchThread(LPVOID)
 					}
 
 					// close 
-					it->second.OnEvent(RFU::Event::CLOSE);
+					it->second.OnEvent(RFU::Event::PROCESS_DIED);
 
+					it = context->attached_instances.erase(it);
+					printf("New size: %zu\n", context->attached_instances.size());
+				}
+				else if (!handle.ShouldAttach())
+				{
+					// settings changed
+					printf("Closing process (pid %d)\n", handle.id);
+					it->second.OnEvent(RFU::Event::CLOSE);
 					it = context->attached_instances.erase(it);
 					printf("New size: %zu\n", context->attached_instances.size());
 				}

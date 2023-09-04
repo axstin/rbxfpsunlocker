@@ -16,9 +16,10 @@ namespace RFU
 		constexpr uint32_t UNLOCK_METHOD = 1u << 4u;
 		constexpr uint32_t SETTINGS_MASK = (1u << 5u) - 1u; // indicates a setting event, but not necessarily that settings were changed (e.g. load from disk)
 
-		constexpr uint32_t CLOSE = 1u << 5u;
-		constexpr uint32_t CLOSE_APP = 1u << 6u;
-		constexpr uint32_t CLOSE_MASK = CLOSE | CLOSE_APP;
+		constexpr uint32_t PROCESS_DIED = 1u << 5u;
+		constexpr uint32_t CLOSE = 1u << 6u;
+		constexpr uint32_t APP_EXIT = 1u << 7u;
+		constexpr uint32_t CLOSE_MASK = PROCESS_DIED | CLOSE | APP_EXIT;
 	}
 
 	bool CheckForUpdates();

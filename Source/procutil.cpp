@@ -66,27 +66,25 @@ std::vector<ProcUtil::ModuleInfo> ProcUtil::GetProcessModules(DWORD process_id, 
 	HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, process_id);
 	if (snapshot == INVALID_HANDLE_VALUE)
 	{
-		DWORD error_code = GetLastError();
-
-		printf("[%u] Could not create snapshot! Error code: %lu\n",
-			process_id,
-			error_code
-		);
+		printf("[ProcUtil] GetProcessModules(%u, ...) could not create snapshot: %X\n", process_id, GetLastError());
 	}
-
-	if (Module32FirstW(snapshot, &entry) == TRUE)
+	else
 	{
-		do
+		if (Module32FirstW(snapshot, &entry) == TRUE)
 		{
-			ProcUtil::ModuleInfo info{};
-			info.path = entry.szExePath;
-			info.base = entry.modBaseAddr;
-			info.size = entry.modBaseSize;
-			result.push_back(std::move(info));
-		} while (result.size() < limit && Module32NextW(snapshot, &entry) == TRUE);
-	}
+			do
+			{
+				ProcUtil::ModuleInfo info{};
+				info.path = entry.szExePath;
+				info.base = entry.modBaseAddr;
+				info.size = entry.modBaseSize;
+				result.push_back(std::move(info));
+			}
+			while (result.size() < limit && Module32NextW(snapshot, &entry) == TRUE);
+		}
 
-	CloseHandle(snapshot);
+		CloseHandle(snapshot);
+	}
 	return result;
 }
 
