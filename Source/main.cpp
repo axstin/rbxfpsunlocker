@@ -654,18 +654,36 @@ public:
 	}
 
 	void OnEvent(uint32_t ev_flags)
-	{		
+	{	
+		// todo: redesign the event/flag writing/blah code (again) (maybe)
+		// dealing with initiation, one or multiple setting changes, unlocks, and exits on both attached processes and registry instances whilst 
+		// making sure it prompts the user correctly is a fun task
+		// 1. any user input that triggers a flag write (loading settings from disk, setting change in UI, app init) should notify the user if the version being written to has a process running AND the flag values have changed
+		// 2. ideally, a flag file is not read or written to more than once per version per event
+		// 3. flags should only be reverted if "Unlock Client/Studio" is toggled off or the user exits the app
+		// 4. note UnlockMethod setting, which can change whether a process needs to be attached, detached, or reattached as well as trigger flag changes
+		
+		// a separate todo:
+		// there are obvious problems with attaching to Hyperion processes
+		// right now RFU has an okay success rate but it has a lot to do with attach timing and changes with OS (win 10 vs win 11)
+		// reattaches via settings changes or relaunches of RFU will lead to crashes as well
+		// consider removing the ability to attach to Hyperion clients, or hide it from the UI
+		// or... double down and implement more special code to circumvent Hyperion (fun, but not a good idea)
+		// or... convince Roblox to add fps cap and vsync settings to the graphics menu :-D
+
 		if (ev_flags & RFU::Event::CLOSE_MASK)
 		{
 			printf("[%u] Closing instance (IsRegistryInstance=%u, RevertFlagsOnClose=%u)\n", process.id, IsRegistryInstance(), Settings::RevertFlagsOnClose);
 
-			// revert flags if process isn't dead
-			if (ev_flags != RFU::Event::PROCESS_DIED && Settings::RevertFlagsOnClose)
+			if (ev_flags != RFU::Event::PROCESS_DIED)
 			{
-				RobloxFFlags(version_folder).set_target_fps(std::nullopt).set_alt_enter_flag(std::nullopt).apply(ev_flags != RFU::Event::APP_EXIT && !IsRegistryInstance());
+				// revert flags if process isn't dead
+				if (Settings::RevertFlagsOnClose)
+				{
+					RobloxFFlags(version_folder).set_target_fps(std::nullopt).set_alt_enter_flag(std::nullopt).apply(ev_flags != RFU::Event::APP_EXIT && !IsRegistryInstance());
+				}
+				SetFPSCapInMemory(60.0);
 			}
-
-			SetFPSCapInMemory(60.0);
 		}
 		else if (ev_flags & RFU::Event::SETTINGS_MASK)
 		{
