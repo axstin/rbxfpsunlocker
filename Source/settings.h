@@ -7,7 +7,7 @@ namespace Settings
 	enum class UnlockMethodType
 	{
 		Hybrid,
-		MemoryWrite,
+		MemoryWrite_Deprecated,
 		FlagsFile,
 
 		Count

@@ -138,7 +138,7 @@ namespace Settings
 						QuickStart = ParseBool(value);
 					else if (key == "RevertFlagsOnClose")
 						RevertFlagsOnClose = ParseBool(value);
-					else if (key == "UnlockMethod")
+					else if (key == "UnlockMethodV2")
 					{
 						auto parsed = std::stoul(value);
 						if (parsed < static_cast<uint32_t>(UnlockMethodType::Count))
@@ -185,7 +185,7 @@ namespace Settings
 		file << "SilentErrors=" << BoolToString(SilentErrors) << std::endl;
 		file << "QuickStart=" << BoolToString(QuickStart) << std::endl;
 		file << "RevertFlagsOnClose=" << BoolToString(RevertFlagsOnClose) << std::endl;
-		file << "UnlockMethod=" << std::to_string(static_cast<uint32_t>(UnlockMethod)) << std::endl;
+		file << "UnlockMethodV2=" << std::to_string(static_cast<uint32_t>(UnlockMethod)) << std::endl;
 
 		return true;
 	}

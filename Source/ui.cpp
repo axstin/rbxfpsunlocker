@@ -25,7 +25,7 @@
 
 #define RFU_TRAYMENU_UM				(WM_APP + 15)
 #define RFU_TRAYMENU_UM_HYBRID		(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::Hybrid))
-#define RFU_TRAYMENU_UM_MEMWRITE	(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::MemoryWrite))
+#define RFU_TRAYMENU_UM_MEMWRITE	(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::MemoryWrite_Deprecated))
 #define RFU_TRAYMENU_UM_FLAGSFILE	(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::FlagsFile))
 #define RFU_TRAYMENU_UM_LAST		(RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethodType::Count) - 1)
 
@@ -80,7 +80,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			HMENU unlock_method = CreatePopupMenu();
 			AppendMenu(unlock_method, MF_STRING, RFU_TRAYMENU_UM_HYBRID, "Hybrid");
-			AppendMenu(unlock_method, MF_STRING, RFU_TRAYMENU_UM_MEMWRITE, "Memory Write");
+			//AppendMenu(unlock_method, MF_STRING, RFU_TRAYMENU_UM_MEMWRITE, "Memory Write");
 			AppendMenu(unlock_method, MF_STRING, RFU_TRAYMENU_UM_FLAGSFILE, "Flags File");
 			CheckMenuRadioItem(unlock_method, RFU_TRAYMENU_UM, RFU_TRAYMENU_UM_LAST, RFU_TRAYMENU_UM + static_cast<uint32_t>(Settings::UnlockMethod), MF_BYCOMMAND);
 			AppendMenu(popup, MF_POPUP, (UINT_PTR)unlock_method, "Unlock Method");
