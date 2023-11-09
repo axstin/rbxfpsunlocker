@@ -545,6 +545,17 @@ public:
 
 		printf("[%u] Attached to PID %u, version folder %ls\n", process.id, process.id, version_folder.c_str());
 
+		// Special case for Windows Store / "UWP" app.
+		// The process will point to a read-only location while settings are stored elsewhere.
+		if (version_folder.string().find("WindowsApps") != std::string::npos)
+		{
+			auto local_app_data_path = static_cast<std::string>(getenv("LOCALAPPDATA"));
+			auto uwp_versioned_name = version_folder.filename().string();
+			auto uwp_settings_name = uwp_versioned_name.substr(0, uwp_versioned_name.find('_')) + uwp_versioned_name.substr(uwp_versioned_name.rfind('_'));
+			version_folder = std::filesystem::path(local_app_data_path + "\\Packages\\" + uwp_settings_name + "\\LocalState");
+			printf("[%u] Windows Store path was found. Using %ls\n", process.id, version_folder.c_str());
+		}
+
 		OnEvent(RFU::Event::SETTINGS_MASK);
 		MemoryWriteTick();
 
