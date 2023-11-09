@@ -374,114 +374,33 @@ class RobloxInstance
 
 			if (ProcUtil::IsProcess64Bit(handle))
 			{
-				// 40 53 48 83 EC 20 0F B6 D9 E8 ?? ?? ?? ?? 86 58 04 48 83 C4 20 5B C3
-				if (auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x40\x53\x48\x83\xEC\x20\x0F\xB6\xD9\xE8\x00\x00\x00\x00\x86\x58\x04\x48\x83\xC4\x20\x5B\xC3", "xxxxxxxxxx????xxxxxxxxx", start, end))
+				// Assume Studio
+				// Hyperion clients are no longer supported: the pointer to TaskScheduler is now obfuscated
+
+				std::unordered_set<const void *> candidates{};
+				auto i = start;
+				auto stop = (std::min)(end, start + 70 * 1024 * 1024); // optim: keep search roughly within .text
+
+				while (i < stop)
 				{
-					auto gts_fn = result + 14 + ProcUtil::Read<int32_t>(handle, result + 10);
-
-					printf("[%u] GetTaskScheduler (sig studio): %p\n", process.id, gts_fn);
-
-					uint8_t buffer[0x100];
-					if (ProcUtil::Read(handle, gts_fn, buffer, sizeof(buffer)))
-					{
-						ts_ptr_candidates.clear();
-						auto inst = buffer;
-						while (inst = sigscan::scan("\x48\x8B\x05\x00\x00\x00\x00\x48\x83\xC4", "xxx????xxx", (uintptr_t)inst, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
-						{
-							const uint8_t *remote = gts_fn + (inst - buffer);
-							ts_ptr_candidates.push_back(remote + 7 + *(int32_t *)(inst + 3));
-							inst++;
-						}
-						return !ts_ptr_candidates.empty();
-					}
+					// 48 8B 05 ?? ?? ?? ?? 8B 00
+					auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x48\x8B\x05\x00\x00\x00\x00\x8B\x00", "xxx????xx", i, stop); // mov rax, <Rel32>; mov eax, [rax]
+					if (!result) break;
+					candidates.insert(result + 7 + ProcUtil::Read<int32_t>(handle, result + 3));
+					i = result + 1;
 				}
-				else
-				{
-					// Assume Byfron
-					// 
-					// Thought process: Fancy new anti-cheat technology makes inspecting .text a bit more troublesome than before
-					// As a result, I've opted to sig GetTaskScheduler directly instead of looking for one its callers.
-					// A longer, uglier signature could be used to produce a single result here,
-					// but for the sake of (hopefully) increased reliability, we'll use a simple signature that returns about 8 candidates in a loaded game.
 
-					std::unordered_set<const void *> candidates{};
-					auto i = start;
-					auto stop = (std::min)(end, start + 40 * 1024 * 1024); // optim: keep search roughly within .text
-					const size_t candidate_threshold = 5;
+				printf("[%u] GetTaskScheduler (sig 64-bit generic): found %zu candidates\n", process.id, candidates.size());
 
-					while (i < stop)
-					{
-						// 48 8B 05 ?? ?? ?? ?? 48 83 C4 ?? 5B C3
-						auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x48\x8B\x05\x00\x00\x00\x00\x48\x83\xC4\x00\x5B\xC3", "xxx????xxx?xx", i, stop); // mov rax, <Rel32>; add rsp, 40h; pop rbx; retn
-						if (!result) break;
-						candidates.insert(result + 7 + ProcUtil::Read<int32_t>(handle, result + 3));
-						if (candidates.size() >= candidate_threshold) break;
-						i = result + 1;
-					}
+				if (candidates.empty())
+					return false; // keep looking
 
-					printf("[%u] GetTaskScheduler (sig byfron): found %zu candidates\n", process.id, candidates.size());
-
-					if (candidates.size() != candidate_threshold)
-						return false; // keep looking
-
-					ts_ptr_candidates = std::vector<const void *>(candidates.begin(), candidates.end());
-					return true;
-				}
-			} else
+				ts_ptr_candidates = std::vector<const void *>(candidates.begin(), candidates.end());
+				return true;
+			}
+			else
 			{
-				// 55 8B EC 83 E4 F8 83 EC 08 E8 ?? ?? ?? ?? 8D 0C 24
-				if (auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x08\xE8\xDE\xAD\xBE\xEF\x8D\x0C\x24", "xxxxxxxxxx????xxx", start, end))
-				{
-					auto gts_fn = result + 14 + ProcUtil::Read<int32_t>(handle, result + 10);
-
-					printf("[%u] GetTaskScheduler (sig ltcg): %p\n", process.id, gts_fn);
-
-					uint8_t buffer[0x100];
-					if (ProcUtil::Read(handle, gts_fn, buffer, sizeof(buffer)))
-					{
-						if (auto inst = sigscan::scan("\xA1\x00\x00\x00\x00\x8B\x4D\xF4", "x????xxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
-						{
-							//printf("[%p] Inst: %p\n", process, gts_fn + (inst - buffer));
-							ts_ptr_candidates = { (const void *)(*(uint32_t *)(inst + 1)) };
-							return true;
-						}
-					}
-				}
-				// 55 8B EC 83 EC 10 56 E8 ?? ?? ?? ?? 8B F0 8D 45 F0
-				else if (auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x55\x8B\xEC\x83\xEC\x10\x56\xE8\x00\x00\x00\x00\x8B\xF0\x8D\x45\xF0", "xxxxxxxx????xxxxx", start, end))
-				{
-					auto gts_fn = result + 12 + ProcUtil::Read<int32_t>(handle, result + 8);
-
-					printf("[%u] GetTaskScheduler (sig non-ltcg): %p\n", process.id, gts_fn);
-
-					uint8_t buffer[0x100];
-					if (ProcUtil::Read(handle, gts_fn, buffer, sizeof(buffer)))
-					{
-						if (auto inst = sigscan::scan("\xA1\x00\x00\x00\x00\x8B\x4D\xF4", "x????xxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
-						{
-							//printf("[%p] Inst: %p\n", process, gts_fn + (inst - buffer));
-							ts_ptr_candidates = { (const void *)(*(uint32_t *)(inst + 1)) };
-							return true;
-						}
-					}
-				}
-				// 55 8B EC 53 56 57 8B F9 E8 ?? ?? ?? ?? 8B D8
-				else if (auto result = (const uint8_t *)ProcUtil::ScanProcess(handle, "\x55\x8B\xEC\x53\x56\x57\x8B\xF9\xE8\x00\x00\x00\x00\x8B\xD8", "xxxxxxxxx????xx", start, end))
-				{
-					auto gts_fn = result + 13 + ProcUtil::Read<int32_t>(handle, result + 9);
-
-					printf("[%u] GetTaskScheduler (sig uwp): %p\n", process.id, gts_fn);
-
-					uint8_t buffer[0x100];
-					if (ProcUtil::Read(handle, gts_fn, buffer, sizeof(buffer)))
-					{
-						if (auto inst = sigscan::scan("\x50\xA1\x00\x00\x00\x00\x8B\x4D\xF4", "xx????xxx", (uintptr_t)buffer, (uintptr_t)buffer + 0x100)) // mov eax, <TaskSchedulerPtr>; mov ecx, [ebp-0Ch])
-						{
-							ts_ptr_candidates = { (const void *)(*(uint32_t *)(inst + 2)) };
-							return true;
-						}
-					}
-				}
+				// 32-bit clients aren't supported
 			}
 		}
 		catch (ProcUtil::WindowsException &e)
