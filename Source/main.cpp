@@ -443,9 +443,18 @@ class RobloxInstance
 		return -1;
 	}
 
+	bool ShouldUseFlagsFile() const
+	{
+		return Settings::UnlockMethod == Settings::UnlockMethodType::FlagsFile || (Settings::UnlockMethod == Settings::UnlockMethodType::Hybrid && IsLikelyAntiCheatProtected());
+	}
+
 public:
 	RobloxInstance() {}
-	RobloxInstance(std::filesystem::path bin_path, bool is_client) : bin_path(std::move(bin_path)), is_client(is_client) {}
+	RobloxInstance(std::filesystem::path binary_path, bool is_client) : bin_path(std::move(binary_path)), is_client(is_client)
+	{
+		version_folder = bin_path.parent_path();
+		use_flags_file = ShouldUseFlagsFile();
+	}
 
 	const RobloxProcessHandle &GetHandle() const
 	{
@@ -634,8 +643,7 @@ public:
 
 			if (ev_flags & RFU::Event::UNLOCK_METHOD)
 			{
-				if (Settings::UnlockMethod == Settings::UnlockMethodType::FlagsFile
-					|| (Settings::UnlockMethod == Settings::UnlockMethodType::Hybrid && IsLikelyAntiCheatProtected()))
+				if (ShouldUseFlagsFile())
 				{
 					printf("[%u] Using FlagsFile mode\n", process.id);
 					use_flags_file = true;
