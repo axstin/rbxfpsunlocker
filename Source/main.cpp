@@ -213,7 +213,7 @@ void NotifyError(const char* title, const char* error)
 	}
 	else
 	{
-		MessageBoxA(UI::Window, error, title, MB_OK);
+		UI::Message(error, title, MB_OK);
 	}
 }
 
@@ -223,7 +223,7 @@ bool RobloxFFlags::apply(bool prompt)
 	{
 		if (!write_disk())
 		{
-			NotifyError("rbxfpsunlocker Error", "Failed to write ClientAppSettings.json! If running the Windows Store version of Roblox, try running Roblox FPS Unlocker as administrator or using a different unlock method.");
+			NotifyError("rbxfpsunlocker Error", "Failed to write ClientAppSettings.json! Try running Roblox FPS Unlocker as administrator or using a different unlock method.");
 			return false;
 		}
 
@@ -255,7 +255,7 @@ bool RobloxFFlags::apply(bool prompt)
 			}
 			stream << "\n\nin " << settings_file_path << "\n\nRestarting Roblox may be required for changes to take effect.";
 
-			MessageBoxA(UI::Window, stream.str().c_str(), "rbxfpsunlocker", MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
+			UI::Message(stream.str());
 		}
 
 		target_fps_mod = false;
@@ -284,8 +284,20 @@ bool CheckExecutableFile64Bit(const std::filesystem::path &path)
 	return headers.OptionalHeader.Magic == 0x020B;
 }
 
+std::filesystem::path GetLocalAppDataPath()
+{
+	wchar_t *path = nullptr;
+	if (SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &path) == S_OK)
+	{
+		assert(path);
+		return path;
+	}
+	return {};
+}
+
 class RobloxInstance
 {
+	std::filesystem::path bin_path{};
 	std::filesystem::path version_folder{};
 	bool is_client = false;
 
@@ -343,7 +355,7 @@ class RobloxInstance
 		}
 		else
 		{
-			return is_client && CheckExecutableFile64Bit(version_folder / "RobloxPlayerBeta.exe");
+			return is_client && CheckExecutableFile64Bit(bin_path);
 		}
 	}
 
@@ -433,7 +445,7 @@ class RobloxInstance
 
 public:
 	RobloxInstance() {}
-	RobloxInstance(std::filesystem::path version_folder, bool is_client) : version_folder(std::move(version_folder)), is_client(is_client) {}
+	RobloxInstance(std::filesystem::path bin_path, bool is_client) : bin_path(std::move(bin_path)), is_client(is_client) {}
 
 	const RobloxProcessHandle &GetHandle() const
 	{
@@ -458,22 +470,23 @@ public:
 	bool AttachProcess(const RobloxProcessHandle &handle, int retry_count)
 	{
 		process = handle;
-		version_folder = process.FetchPath().parent_path(); // note: CreateToolhelp32Snapshot opens a handle momentarily here
+		bin_path = process.FetchPath(); // note: CreateToolhelp32Snapshot opens a handle momentarily here
 		is_client = handle.type != RobloxHandleType::Studio;
 		retries_left = retry_count;
 
-		printf("[%u] Attached to PID %u, version folder %ls\n", process.id, process.id, version_folder.c_str());
+		printf("[%u] Attached to PID %u, bin path %ls\n", process.id, process.id, bin_path.c_str());
 
-		// Special case for Windows Store / "UWP" app.
-		// The process will point to a read-only location while settings are stored elsewhere.
-		if (version_folder.string().find("WindowsApps") != std::string::npos)
+		if (handle.type == RobloxHandleType::UWP)
 		{
-			auto local_app_data_path = static_cast<std::string>(getenv("LOCALAPPDATA"));
-			auto uwp_versioned_name = version_folder.filename().string();
-			auto uwp_settings_name = uwp_versioned_name.substr(0, uwp_versioned_name.find('_')) + uwp_versioned_name.substr(uwp_versioned_name.rfind('_'));
-			version_folder = std::filesystem::path(local_app_data_path + "\\Packages\\" + uwp_settings_name + "\\LocalState");
-			printf("[%u] Windows Store path was found. Using %ls\n", process.id, version_folder.c_str());
+			// Roblox's package name (ROBLOXCorporation.ROBLOX) and publisher ID (55nm5eh3cm0pr) shouldn't ever change
+			version_folder = GetLocalAppDataPath() / "Packages" / "ROBLOXCorporation.ROBLOX_55nm5eh3cm0pr" / "LocalState";
 		}
+		else
+		{
+			version_folder = bin_path.parent_path();
+		}
+
+		printf("[%u] Using version folder %ls\n", process.id, version_folder.c_str());
 
 		OnEvent(RFU::Event::SETTINGS_MASK);
 		MemoryWriteTick();
@@ -653,17 +666,6 @@ public:
 	}
 };
 
-std::filesystem::path GetLocalAppDataPath()
-{
-	wchar_t *path = nullptr;
-	if (SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &path) == S_OK)
-	{
-		assert(path);
-		return path;
-	}
-	return {};
-}
-
 std::filesystem::path GetCurrentClientVersionPath()
 {
 	HKEY key;
@@ -673,7 +675,7 @@ std::filesystem::path GetCurrentClientVersionPath()
 		DWORD length = sizeof(version) - 1;
 		if (RegQueryValueEx(key, "version", NULL, NULL, (LPBYTE)version, &length) == ERROR_SUCCESS)
 		{
-			return GetLocalAppDataPath() / "Roblox" / "Versions" / version;
+			return GetLocalAppDataPath() / "Roblox" / "Versions" / version / "RobloxPlayerBeta.exe";
 		}
 	}
 	return {};
@@ -688,7 +690,7 @@ std::filesystem::path GetCurrentStudioVersionPath()
 		DWORD length = sizeof(version) - 1;
 		if (RegQueryValueEx(key, "version", NULL, NULL, (LPBYTE)version, &length) == ERROR_SUCCESS)
 		{
-			return GetLocalAppDataPath() / "Roblox" / "Versions" / version;
+			return GetLocalAppDataPath() / "Roblox" / "Versions" / version / "RobloxStudioBeta.exe";
 		}
 	}
 	return {};

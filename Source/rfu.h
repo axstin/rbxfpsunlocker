@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#define RFU_VERSION "5.1"
+#define RFU_VERSION "5.2"
 #define RFU_GITHUB_REPO "axstin/rbxfpsunlocker"
 
 namespace RFU

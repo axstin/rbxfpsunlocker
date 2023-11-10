@@ -2,6 +2,7 @@
 #include <shellapi.h>
 
 #include <cstdio>
+#include <atomic>
 
 #include "ui.h"
 #include "resource.h"
@@ -35,9 +36,19 @@
 HWND UI::Window = NULL;
 int UI::AttachedProcessesCount = 0;
 bool UI::IsConsoleOnly = false;
+std::atomic_int MessageBoxCount = 0;
 
 HANDLE WatchThread;
 NOTIFYICONDATA NotifyIconData;
+
+int UI::Message(std::string_view message, std::string_view title, unsigned int option)
+{
+	MessageBoxCount++;
+	// null window so a taskbar icon is shown. however, now our dialog is non-modal
+	auto result = MessageBoxA(NULL, message.data(), title.data(), option | MB_SETFOREGROUND);
+	MessageBoxCount--;
+	return result;
+}
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -47,6 +58,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 		if (lParam == WM_RBUTTONDOWN || lParam == WM_LBUTTONDOWN)
 		{
+			if (MessageBoxCount != 0)
+				break;
+
 			POINT position;
 			GetCursorPos(&position);
 
@@ -105,7 +119,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			SetForegroundWindow(hwnd); // to allow "clicking away"
 			BOOL result = TrackPopupMenu(popup, TPM_RETURNCMD | TPM_TOPALIGN | TPM_LEFTALIGN, position.x, position.y, 0, hwnd, NULL);
 
-			if (result != 0)
+			if (result != 0 && MessageBoxCount == 0)
 			{
 				uint32_t event_flags{};
 
@@ -124,6 +138,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					break;
 
 				case RFU_TRAYMENU_GITHUB:
+					UI::Message("Um GUH");
 					ShellExecuteA(NULL, "open", "https://github.com/" RFU_GITHUB_REPO, NULL, NULL, SW_SHOWNORMAL);
 					break;
 
