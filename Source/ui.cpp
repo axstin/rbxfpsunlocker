@@ -138,7 +138,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					break;
 
 				case RFU_TRAYMENU_GITHUB:
-					UI::Message("Um GUH");
 					ShellExecuteA(NULL, "open", "https://github.com/" RFU_GITHUB_REPO, NULL, NULL, SW_SHOWNORMAL);
 					break;
 
