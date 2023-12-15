@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - name: Download release binary (x64)
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: rbxfpsunlocker (Release, x64)
           path: x64
