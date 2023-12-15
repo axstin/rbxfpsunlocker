@@ -26,7 +26,7 @@ jobs:
     - name: Build Solution
       run: msbuild "-p:Configuration=${{ matrix.configuration }};Platform=${{ matrix.platform }}" rbxfpsunlocker.sln
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: rbxfpsunlocker (${{ matrix.configuration }}, ${{ matrix.platform }})
         path: ${{ matrix.platform == 'x86' && '.' || matrix.platform }}\${{ matrix.configuration }}\*
