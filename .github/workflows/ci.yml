@@ -46,7 +46,7 @@ jobs:
         run: zip -9 ../rbxfpsunlocker-x64.zip rbxfpsunlocker.exe
         working-directory: ./x64
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           draft: true
           files: rbxfpsunlocker-x64.zip
